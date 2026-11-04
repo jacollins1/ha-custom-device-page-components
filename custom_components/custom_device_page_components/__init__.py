@@ -26,7 +26,7 @@ from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.typing import ConfigType
 import homeassistant.helpers.config_validation as cv
 
-from .bindings import BindingsManager
+from .bindings import BindingsManager, is_ieee
 from .const import (
     CONF_BINDINGS,
     CONF_COLOR_TEMP,
@@ -150,10 +150,13 @@ def _remove_disabled_builtins(hass: HomeAssistant, entry: ConfigEntry) -> None:
         drop.add(KIND_CT_KELVIN)
     if not entry.options.get(CONF_BINDINGS, True):
         drop |= set(KINDS_BINDINGS)
-    if not drop:
-        return
     for reg in er.async_entries_for_config_entry(ent_reg, entry.entry_id):
-        if (reg.unique_id or "").rsplit("_", 1)[-1] in drop:
+        prefix, _, kind = (reg.unique_id or "").rpartition("_")
+        if kind in drop or (
+            # Per-device binding entities made by 0.1.0-0.1.2 for devices
+            # without a real IEEE address (ZHA group devices, 2026.11+).
+            kind in ("boundto", "boundfrom", "readbindings") and not is_ieee(prefix)
+        ):
             ent_reg.async_remove(reg.entity_id)
 
 

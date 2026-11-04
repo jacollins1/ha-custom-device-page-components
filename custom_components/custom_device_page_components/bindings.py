@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 from typing import Any
 
 from homeassistant.core import HomeAssistant, callback
@@ -40,10 +41,24 @@ ST_OK = "OK"
 ST_NO_ZHA = "ZHA not available"
 
 
+# A Zigbee IEEE address as ZHA writes it in device identifiers.
+_IEEE = re.compile(r"^[0-9a-fA-F]{2}(:[0-9a-fA-F]{2}){7}$")
+
+
+def is_ieee(value: str) -> bool:
+    """True for a real Zigbee IEEE address."""
+    return bool(_IEEE.match(value or ""))
+
+
 def zha_ieee(device: dr.DeviceEntry) -> str | None:
-    """IEEE address of a ZHA device, from its registry identifiers."""
+    """IEEE address of a ZHA device, from its registry identifiers.
+
+    Since Home Assistant 2026.11 every ZHA group also has a device, with a
+    synthetic ("zha", "<entry>_group_...") identifier. Groups have no binding
+    table, so only real IEEE addresses count.
+    """
     for domain, ident in device.identifiers:
-        if domain == "zha":
+        if domain == "zha" and is_ieee(ident):
             return ident
     return None
 

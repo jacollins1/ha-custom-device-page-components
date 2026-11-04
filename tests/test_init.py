@@ -368,3 +368,44 @@ async def test_bindings_reader(hass):
         out = mgr.bound_to(str(sw_ieee))
     assert out["items"] == ["Dining bulbs ← ep1 on_off (0x0006)"]
     assert out["coordinator_reporting"] == ["ep1 smartenergy_metering (0x0702)"]
+
+
+def test_zha_ieee_ignores_group_devices():
+    """2026.11 ZHA group devices carry a synthetic identifier, not an IEEE."""
+    from types import SimpleNamespace
+
+    from custom_components.custom_device_page_components.bindings import zha_ieee
+
+    assert zha_ieee(SimpleNamespace(identifiers={("zha", "00:17:88:01:0e:d4:f6:21")})) == "00:17:88:01:0e:d4:f6:21"
+    assert zha_ieee(SimpleNamespace(identifiers={("zha", "01KXYZ_group_0005")})) is None
+    assert zha_ieee(SimpleNamespace(identifiers={("hue", "00:17:88:01:0e:d4:f6:21")})) is None
+
+
+async def test_stale_group_binding_entities_removed(hass, setup):
+    """Binding entities an older version made for a ZHA group device go on reload."""
+    entry = setup["entry"]
+    reg = er.async_get(hass)
+    stale = reg.async_get_or_create("sensor", DOMAIN, "01KXYZ_group_0005_boundto", config_entry=entry)
+    real = reg.async_get_or_create("sensor", DOMAIN, "00:11:22:33:44:55:66:77_boundto", config_entry=entry)
+    with patch("custom_components.custom_device_page_components.add_extra_js_url"):
+        # bindings on, so only the group-device entity is stale
+        hass.config_entries.async_update_entry(entry, options={**entry.options, "bindings_enabled": True})
+        await hass.async_block_till_done()
+        assert await hass.config_entries.async_reload(entry.entry_id)
+        await hass.async_block_till_done()
+    assert reg.async_get(stale.entity_id) is None
+    assert reg.async_get(real.entity_id) is not None
+
+
+async def test_color_temp_box_follows_light_to_new_device(hass, setup):
+    """A light moved to another device (2026.11 ZHA groups) takes its boxes along."""
+    reg = er.async_get(hass)
+    other = MockConfigEntry(domain="zha", title="Zigbee 2")
+    other.add_to_hass(hass)
+    new_dev = dr.async_get(hass).async_get_or_create(
+        config_entry_id=other.entry_id, identifiers={("zha", "grp_1")}, name="Group device",
+    )
+    reg.async_update_entity(setup["ent"].entity_id, device_id=new_dev.id)
+    await hass.async_block_till_done()
+    boxes = [e for e in er.async_entries_for_config_entry(reg, setup["entry"].entry_id) if e.domain == "number"]
+    assert boxes and all(b.device_id == new_dev.id for b in boxes)

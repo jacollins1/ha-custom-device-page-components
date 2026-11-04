@@ -150,6 +150,7 @@ class ColorTempNumber(NumberEntity):
     async def async_added_to_hass(self) -> None:
         """Follow the light's state and registry entry."""
         self._subscribe()
+        self._follow_device()
 
     async def async_will_remove_from_hass(self) -> None:
         """Stop following."""
@@ -184,7 +185,25 @@ class ColorTempNumber(NumberEntity):
             self.hass.async_create_task(self._remove_self())
             return
         self._subscribe()
+        self._follow_device()
         self.async_write_ha_state()
+
+    @callback
+    def _follow_device(self) -> None:
+        """Stay on the light's device when the light moves to another one.
+
+        Home Assistant 2026.11 moves each ZHA group light from the coordinator
+        to a device of its own, for example.
+        """
+        light = er.async_get(self.hass).async_get(self.source_id)
+        mine = self.registry_entry
+        if light is None or mine is None or not light.device_id:
+            return
+        if light.device_id != mine.device_id:
+            self.device_entry = dr.async_get(self.hass).async_get(light.device_id)
+            er.async_get(self.hass).async_update_entity(
+                self.entity_id, device_id=light.device_id
+            )
 
     async def _remove_self(self) -> None:
         ent_reg = er.async_get(self.hass)

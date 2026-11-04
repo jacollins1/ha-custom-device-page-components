@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.3 — 2026-11-04
+
+Ready for Home Assistant 2026.11, which gives every ZHA group a device of its own:
+
+- Zigbee bindings: only devices with a real IEEE address get *Bound to*, *Bound from* and *Read Zigbee bindings*. ZHA group devices (synthetic identifiers) are skipped, and such entities made by an earlier version are removed on start.
+- Color temperature boxes move with their light when the light moves to another device (for example a ZHA group light leaving the coordinator), so they show on the group's own device page.
+
 ## 0.1.2 — 2026-11-04
 
 - List style: the first column is the row's link and every other column is its own small grey line under it, styled like the Related card's subtitles. Empty cells are left out. (Previously all columns were joined into one link.)
