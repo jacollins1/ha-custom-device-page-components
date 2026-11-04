@@ -63,6 +63,24 @@ areas, floors, labels, device/entity ↔ labels, integration entries,
 dashboards, dashboard references, automation and script references, and the
 Related index.
 
+## Example
+
+![The Related card (left) and a custom "Nearby Devices" component (right) on a ZHA wall switch's device page](docs/images/example-components.png)
+
+Left: the built-in **Related helpers, integrations and dashboards** card.
+Right: **Nearby Devices**, a component built in the no-code builder, placed in
+column 3 in *List* style. Its settings:
+
+| Step | Setting |
+|---|---|
+| Source table | Devices |
+| Where | `area_id` is *this device's* `area_id` AND `disabled_by` is empty |
+| Columns | `display_name`, `integration`, `model`, `labels` |
+| Row link | Device page, using `id` |
+
+Every device page then lists the other devices in the same area, each linking
+to its own device page.
+
 ## Safety: what this integration will not do
 
 - **No free-typed SQL.** The builder stores a description of the query;
