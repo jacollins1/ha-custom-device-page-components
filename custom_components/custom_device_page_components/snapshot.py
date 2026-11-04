@@ -24,7 +24,7 @@ from homeassistant.helpers import (
 )
 from homeassistant.loader import async_get_loaded_integration
 
-from .compat import device_entry_ids, device_primary_entry
+from .compat import all_devices, device_entry_ids, device_primary_entry
 from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
@@ -196,7 +196,7 @@ class SnapshotManager:
         entity_to_device: dict[str, str] = {
             e.entity_id: e.device_id for e in ent_reg.entities.values() if e.device_id
         }
-        device_ids = set(dev_reg.devices.keys())
+        device_ids = {d.id for d in all_devices(dev_reg)}
 
         def devices_for(tokens: set[str]) -> set[str]:
             found = {t for t in tokens if t in device_ids}
@@ -215,7 +215,7 @@ class SnapshotManager:
 
         # 1. The device's own integration entries.
         entries = {e.entry_id: e for e in hass.config_entries.async_entries()}
-        for device in dev_reg.devices.values():
+        for device in all_devices(dev_reg):
             for entry_id in device_entry_ids(device):
                 entry = entries.get(entry_id)
                 if entry is None or entry.domain == DOMAIN:
@@ -237,7 +237,7 @@ class SnapshotManager:
                 continue
             name, itype = _integration_info(hass, entry.domain)
             for dev_id in hits:
-                if entry.entry_id in device_entry_ids(dev_reg.devices[dev_id]):
+                if (dev := dev_reg.async_get(dev_id)) is None or entry.entry_id in device_entry_ids(dev):
                     continue
                 add(dev_id, _entry_rel(entry, name, itype, "Uses this device"))
 
@@ -310,12 +310,12 @@ class SnapshotManager:
                     ",".join(sorted(d.labels)),
                     1 if self.device_available(d.id) else 0,
                 )
-                for d in dev_reg.devices.values()
+                for d in all_devices(dev_reg)
             ]
         if "device_config_entries" in needed:
             out["device_config_entries"] = [
                 (d.id, eid, domain_of(eid))
-                for d in dev_reg.devices.values()
+                for d in all_devices(dev_reg)
                 for eid in device_entry_ids(d)
             ]
         if "entities" in needed:
@@ -369,7 +369,7 @@ class SnapshotManager:
             ]
         if "device_labels" in needed:
             out["device_labels"] = [
-                (d.id, label) for d in dev_reg.devices.values() for label in d.labels
+                (d.id, label) for d in all_devices(dev_reg) for label in d.labels
             ]
         if "entity_labels" in needed:
             out["entity_labels"] = [

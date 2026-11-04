@@ -21,6 +21,7 @@ from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
+from .compat import all_devices
 from .const import DOMAIN, SIGNAL_BINDINGS_UPDATED
 
 _LOGGER = logging.getLogger(__name__)
@@ -233,7 +234,7 @@ class BindingsManager:
     def _names(self) -> tuple[dict[str, str], dict[int, str], str | None]:
         dev_reg = dr.async_get(self.hass)
         names: dict[str, str] = {}
-        for device in dev_reg.devices.values():
+        for device in all_devices(dev_reg):
             if ieee := zha_ieee(device):
                 names[ieee] = device.name_by_user or device.name or ieee
         groups: dict[int, str] = {}

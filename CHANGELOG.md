@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.1 — 2026-11-04
+
+- Fix: stop using `DeviceRegistry.devices` as a mapping (`.values()`, `.keys()`, `[id]`). Home Assistant 2026.10 logs a deprecation warning for it on every start, and it stops working in 2027.9. The registry is now iterated directly, with a fallback for older releases.
+- Tests: any deprecated device-registry access now fails the test suite.
+- Repository moved to `jacollins1/ha-custom-device-page-components`.
+
 ## 0.1.0 — 2026-11-04
 
 First release.

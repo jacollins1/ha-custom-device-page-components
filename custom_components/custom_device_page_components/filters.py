@@ -13,7 +13,7 @@ from typing import Any
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr
 
-from .compat import device_entry_ids
+from .compat import all_devices, device_entry_ids
 
 # Device "type": the entry type, or manufacturer + model.
 TYPE_SERVICE = "entry_type:service"
@@ -33,7 +33,7 @@ def type_options(hass: HomeAssistant) -> list[dict[str, str]]:
         TYPE_DEVICE: "Physical devices (not services)",
         TYPE_SERVICE: "Services",
     }
-    for device in dr.async_get(hass).devices.values():
+    for device in all_devices(dr.async_get(hass)):
         if device.manufacturer or device.model:
             key = model_key(device.manufacturer, device.model)
             opts[key] = " ".join(x for x in (device.manufacturer, device.model) if x)
@@ -48,7 +48,7 @@ def type_options(hass: HomeAssistant) -> list[dict[str, str]]:
 def integration_options(hass: HomeAssistant) -> list[dict[str, str]]:
     """Integrations that own at least one device."""
     domains: set[str] = set()
-    for device in dr.async_get(hass).devices.values():
+    for device in all_devices(dr.async_get(hass)):
         for entry_id in device_entry_ids(device):
             if entry := hass.config_entries.async_get_entry(entry_id):
                 domains.add(entry.domain)

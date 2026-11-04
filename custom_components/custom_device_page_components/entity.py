@@ -8,6 +8,7 @@ from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
 
 from .bindings import _app, zha_ieee
+from .compat import all_devices
 from .const import DOMAIN, NAME, VERSION
 
 
@@ -27,7 +28,7 @@ def hub_device_info(entry: ConfigEntry) -> DeviceInfo:
 def zha_devices(hass: HomeAssistant) -> list[tuple[dr.DeviceEntry, str]]:
     """(device, ieee) for ZHA devices except the coordinator."""
     dev_reg = dr.async_get(hass)
-    found = [(d, ieee) for d in dev_reg.devices.values() if (ieee := zha_ieee(d))]
+    found = [(d, ieee) for d in all_devices(dev_reg) if (ieee := zha_ieee(d))]
     coordinator = None
     if app := _app(hass):
         try:

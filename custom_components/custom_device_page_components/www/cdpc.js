@@ -7,7 +7,7 @@
  * that worked. If a frontend update changes the device page, the card does
  * not appear and Home Assistant shows a Repair issue instead.
  */
-const CDPC_VERSION = "0.1.0";
+const CDPC_VERSION = "0.1.1";
 const DOMAIN = "custom_device_page_components";
 const PAGE_TAG = "ha-config-device-page";
 const CARD_TAG = "cdpc-device-components";

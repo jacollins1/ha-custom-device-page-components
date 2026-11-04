@@ -24,3 +24,17 @@ def device_primary_entry(device: dr.DeviceEntry) -> str | None:
     if hasattr(type(device), "config_entry_id") or hasattr(device, "config_entry_id"):
         return getattr(device, "config_entry_id", None)
     return device.primary_config_entry
+
+
+def all_devices(dev_reg: dr.DeviceRegistry) -> list[dr.DeviceEntry]:
+    """Every device entry in the registry.
+
+    Since 2026.10 iterating ``DeviceRegistry.devices`` yields the entries and any
+    mapping access (``.values()``, ``.keys()``, ``[id]``, ``id in``) is reported
+    as deprecated (removed in 2027.9). Older releases return a plain mapping,
+    whose iteration yields device ids.
+    """
+    items = list(dev_reg.devices)
+    if items and isinstance(items[0], str):
+        return [dev_reg.async_get(device_id) for device_id in items]
+    return items
