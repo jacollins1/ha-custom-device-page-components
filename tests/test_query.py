@@ -128,3 +128,12 @@ def test_runaway_query_is_stopped(monkeypatch):
              aggregates=[{"func": "count", "column": "*"}], columns=["agg:0"])
     with pytest.raises(query.QueryError, match="too long"):
         query.run(s, big, DEV)
+
+
+def test_column_cap():
+    """At most MAX_COLUMNS (8) displayed columns; hidden key columns don't count."""
+    cols = [f"t0.{c}" for c in E[: query.MAX_COLUMNS]]
+    assert len(cols) == query.MAX_COLUMNS
+    query.validate(spec(columns=cols))
+    with pytest.raises(query.QueryError, match="at most 8 columns"):
+        query.validate(spec(columns=[f"t0.{c}" for c in E[: query.MAX_COLUMNS + 1]]))

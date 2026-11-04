@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.2 — 2026-11-04
+
+- List style: the first column is the row's link and every other column is its own small grey line under it, styled like the Related card's subtitles. Empty cells are left out. (Previously all columns were joined into one link.)
+- A component shows at most 8 columns. The Columns step refuses more, and a stored component with more shows an error asking you to edit it.
+
 ## 0.1.1 — 2026-11-04
 
 - Fix: stop using `DeviceRegistry.devices` as a mapping (`.values()`, `.keys()`, `[id]`). Home Assistant 2026.10 logs a deprecation warning for it on every start, and it stops working in 2027.9. The registry is now iterated directly, with a fallback for older releases.

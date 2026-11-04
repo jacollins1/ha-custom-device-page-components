@@ -48,7 +48,7 @@ builder:
 | Conditions | Keep matching rows; values can be typed or taken from the device whose page is open | `WHERE … AND / OR` |
 | Grouping and summaries | Count, min, max, sum, average, list | `GROUP BY` |
 | Sorting and row limit | Up to three sort columns, 1–500 rows | `ORDER BY`, `LIMIT` |
-| Columns and row link | What is shown and what a row opens (entity, device, area, integration entry, page) | `SELECT` |
+| Columns and row link | Up to 8 columns, and what a row opens (entity, device, area, integration entry, page). In *List* style the first column is the link and each other column is a small grey line under it, like the Related card | `SELECT` |
 | Row actions | A button per row that runs a Home Assistant action | — |
 | Which device pages | Device type (manufacturer/model, device or service), status (enabled/disabled, available/unavailable), integration, area | — |
 | Preview | Runs the component for a device you pick | — |

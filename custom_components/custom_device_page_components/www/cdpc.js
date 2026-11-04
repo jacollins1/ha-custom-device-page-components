@@ -7,7 +7,9 @@
  * that worked. If a frontend update changes the device page, the card does
  * not appear and Home Assistant shows a Repair issue instead.
  */
-const CDPC_VERSION = "0.1.1";
+const CDPC_VERSION = "0.1.2";
+// Displayed columns per component; the server enforces the same cap.
+const MAX_COLUMNS = 8;
 const DOMAIN = "custom_device_page_components";
 const PAGE_TAG = "ha-config-device-page";
 const CARD_TAG = "cdpc-device-components";
@@ -114,6 +116,7 @@ const STYLE = `
   .refresh { border: none; font-size: 18px; padding: 0 4px; }
   .confirm { font-size: 13px; color: var(--primary-text-color); }
   .note { font-size: 12px; color: var(--secondary-text-color); margin-top: 6px; }
+  .acts { margin-top: 4px; }
 `;
 
 const esc = (v) =>
@@ -218,18 +221,27 @@ class CdpcDeviceComponents extends HTMLElement {
     if (!comp.rows.length) return `<div class="empty">${esc(comp.empty_text)}</div>`;
     const more = comp.truncated ? `<div class="note">More rows exist; raise the limit to see them.</div>` : "";
     if (comp.style === "list") {
+      // Like the Related card: the first column is the row's link line; every
+      // further column is its own small secondary line under it.
       return `<ul>${comp.rows
         .map((row) => {
-          const text = row.cells.filter((c) => c !== null && c !== "").join(" · ");
-          return `<li>${this._linkHtml(row.link, text)}<div>${this._actions(comp, row)}</div></li>`;
+          const [first, ...rest] = row.cells.slice(0, MAX_COLUMNS);
+          const title = first === null || first === undefined || first === "" ? "—" : first;
+          const subs = rest
+            .filter((c) => c !== null && c !== undefined && c !== "")
+            .map((c) => `<span class="sub">${esc(c)}</span>`)
+            .join("");
+          const acts = this._actions(comp, row);
+          return `<li>${this._linkHtml(row.link, title)}${subs}${acts ? `<div class="acts">${acts}</div>` : ""}</li>`;
         })
         .join("")}</ul>${more}`;
     }
-    const head = comp.labels.map((l) => `<th>${esc(l)}</th>`).join("") + (comp.actions.length ? "<th></th>" : "");
+    const head = comp.labels.slice(0, MAX_COLUMNS).map((l) => `<th>${esc(l)}</th>`).join("") + (comp.actions.length ? "<th></th>" : "");
     const body = comp.rows
       .map(
         (row) =>
           `<tr>${row.cells
+            .slice(0, MAX_COLUMNS)
             .map((c, i) => `<td>${i === 0 ? this._linkHtml(row.link, c) : esc(c)}</td>`)
             .join("")}${comp.actions.length ? `<td>${this._actions(comp, row)}</td>` : ""}</tr>`
       )

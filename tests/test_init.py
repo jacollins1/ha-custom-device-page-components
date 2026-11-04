@@ -179,6 +179,9 @@ async def test_builder_flow(hass, setup):
     assert r["type"] == "menu"
     r = await mgr.async_configure(r["flow_id"], {"next_step_id": "menu"})
     r = await mgr.async_configure(r["flow_id"], {"next_step_id": "columns"})
+    nine = [f"t0.{c}" for c in ("id", "display_name", "manufacturer", "model", "area_id", "name", "name_by_user", "model_id", "sw_version")]
+    r = await mgr.async_configure(r["flow_id"], {"columns": nine, "link_type": "area", "link_column": "t0.area_id"})
+    assert r["step_id"] == "columns" and r["errors"] == {"columns": "too_many_columns"}
     r = await mgr.async_configure(r["flow_id"], {"columns": ["t1.name"], "link_type": "area", "link_column": "t0.area_id"})
     # changing the source table warns and needs a confirmation
     r = await mgr.async_configure(r["flow_id"], {"next_step_id": "source"})

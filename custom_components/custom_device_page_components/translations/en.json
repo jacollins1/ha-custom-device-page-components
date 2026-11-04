@@ -216,10 +216,13 @@
         "columns": {
           "title": "Columns",
           "data": {
-            "columns": "Columns to show, in order",
+            "columns": "Columns to show, in order (up to 8)",
             "link_type": "Clicking a row's first cell opens",
             "link_column": "Using the value of",
             "rename": "Rename a column header next"
+          },
+          "data_description": {
+            "columns": "The first column is the row's link. In List style the other columns show as small grey lines under it."
           }
         },
         "rename_column": {
@@ -287,7 +290,8 @@
         "link_column_required": "Choose the column whose value the link uses.",
         "action_blocked": "This action is blocked.",
         "target_not_grouped": "With grouping, the target column must be one of the grouped columns.",
-        "invalid_query": "The component can't be saved yet; fix the problem shown below."
+        "invalid_query": "The component can't be saved yet; fix the problem shown below.",
+        "too_many_columns": "Pick at most 8 columns."
       },
       "abort": {
         "reconfigure_successful": "Component saved."

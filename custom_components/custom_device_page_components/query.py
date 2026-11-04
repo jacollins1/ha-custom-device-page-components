@@ -125,6 +125,9 @@ AGGREGATES = {
 LINK_TYPES = ["none", "entity", "device", "area", "config_entry", "url"]
 
 MAX_LIMIT = 500
+# Displayed columns per component (aggregates included; hidden link/action
+# key columns are not counted).
+MAX_COLUMNS = 8
 DEFAULT_LIMIT = 100
 # SQLite VM instructions before a query is aborted (protects the event loop
 # executor from runaway joins).
@@ -338,6 +341,11 @@ def compile_spec(
 
     # Output columns
     columns = list(spec.get("columns") or [])
+    if len(columns) > MAX_COLUMNS:
+        raise QueryError(
+            f"Show at most {MAX_COLUMNS} columns ({len(columns)} chosen): "
+            "edit the component's Columns step"
+        )
     if not columns:
         columns = [f"agg:{i}" for i in range(len(agg_sql))] or [
             f"{alias}.{c}"

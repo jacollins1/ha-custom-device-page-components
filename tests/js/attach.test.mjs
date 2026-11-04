@@ -6,7 +6,8 @@ const calls = [];
 const hass = { config: { version: "2026.10.4" }, devices: { dev1: {} },
   callWS: async (m) => { calls.push(m); if (m.type.endsWith("/device")) return { version: "0.1.0", components: [
     { id: "related", type: "related", title: "Related", order: 0, related: { helpers: [], entries: [{ title: "Kitchen AL", subtitle: "Adaptive Lighting", link: { kind: "url", url: "/config/integrations/integration/adaptive_lighting#config_entry=x" } }], dashboards: [] } },
-    { id: "s1", type: "query", title: "Lights", order: 5, style: "table", empty_text: "", labels: ["Entity", "State"], rows: [{ cells: ["light.a", "on"], key: "k1", link: { kind: "more_info", entity_id: "light.a" } }], actions: [{ index: 0, label: "Toggle", confirm: true, confirm_text: "Sure?" }], truncated: false, error: null }] }; return {}; } };
+    { id: "s1", type: "query", title: "Lights", order: 5, style: "table", empty_text: "", labels: ["Entity", "State"], rows: [{ cells: ["light.a", "on"], key: "k1", link: { kind: "more_info", entity_id: "light.a" } }], actions: [{ index: 0, label: "Toggle", confirm: true, confirm_text: "Sure?" }], truncated: false, error: null },
+    { id: "s2", type: "query", title: "Nearby", order: 6, style: "list", empty_text: "", labels: ["Name", "Integration", "Model", "Labels"], rows: [{ cells: ["Fan", "tplink", "", "fan", "c5", "c6", "c7", "c8", "c9"], key: "k2", link: { kind: "url", url: "/config/devices/device/d2" } }], actions: [], truncated: false, error: null }] }; return {}; } };
 // Fake device page with the layout of the current frontend.
 w.eval(`class Page extends HTMLElement {
   constructor(){ super(); this.attachShadow({mode:"open"}); }
@@ -25,6 +26,13 @@ if (!card) throw new Error("card not attached");
 if (card.parentNode !== page.shadowRoot.querySelectorAll(".column")[0]) throw new Error("wrong column");
 const html = card.shadowRoot.innerHTML;
 for (const s of ["Kitchen AL", "Integration entries", "light.a", "Toggle"]) if (!html.includes(s)) throw new Error("missing " + s);
+// list style: first column is the link line, the rest are .sub lines (empty skipped, max 8 columns)
+const listLi = [...card.shadowRoot.querySelectorAll("ha-card")].find(c => c.textContent.includes("Nearby")).querySelector("li");
+const a = listLi.querySelector("a");
+if (!a || a.textContent !== "Fan" || a.getAttribute("href") !== "/config/devices/device/d2") throw new Error("list: first column is not the link line");
+const subs = [...listLi.querySelectorAll(".sub")].map(e => e.textContent);
+if (JSON.stringify(subs) !== JSON.stringify(["tplink", "fan", "c5", "c6", "c7", "c8"])) throw new Error("list: sub lines wrong: " + JSON.stringify(subs));
+if (listLi.textContent.includes(" · ")) throw new Error("list: cells still concatenated");
 const rep = calls.find(c => c.type.endsWith("/attach_report"));
 if (!rep || rep.ok !== true) throw new Error("no ok report");
 // re-render with 1 column (narrow): card must move into the new first column

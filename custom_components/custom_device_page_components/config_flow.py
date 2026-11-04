@@ -828,7 +828,9 @@ class ComponentFlow(ConfigSubentryFlow):
         if user_input is not None:
             link_type = user_input["link_type"]
             link_col = user_input.get("link_column") or None
-            if link_type != "none" and not link_col:
+            if len(user_input.get("columns") or []) > query.MAX_COLUMNS:
+                errors["columns"] = "too_many_columns"
+            elif link_type != "none" and not link_col:
                 errors["link_column"] = "link_column_required"
             else:
                 self.spec["columns"] = user_input.get("columns", [])
@@ -841,7 +843,10 @@ class ComponentFlow(ConfigSubentryFlow):
             step_id="columns",
             data_schema=vol.Schema(
                 {
-                    vol.Optional("columns", default=self.spec["columns"]): _select(
+                    vol.Optional(
+                        "columns",
+                        default=(user_input or {}).get("columns", self.spec["columns"]),
+                    ): _select(
                         self._col_options(include_aggs=True), multiple=True
                     ),
                     vol.Required("link_type", default=link.get("type", "none")): _select(
