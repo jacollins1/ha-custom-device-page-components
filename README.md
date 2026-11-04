@@ -3,7 +3,7 @@
 Adds cards to Home Assistant **device pages**, and lets you build your own
 cards without writing code.
 
-[![Open your Home Assistant instance and open this repository in the Marketplace.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=jacollins1&repository=custom-device-page-components&category=integration)
+[![Open your Home Assistant instance and open this repository in the Marketplace.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=jacollins1&repository=ha-custom-device-page-components&category=integration)
 
 ## Compatibility
 
@@ -88,7 +88,7 @@ Related index.
 ## Install
 
 1. Marketplace (Home Assistant 2026.11+) or HACS: use the button above, or
-   add `https://github.com/jacollins1/custom-device-page-components` as a
+   add `https://github.com/jacollins1/ha-custom-device-page-components` as a
    custom repository (category *Integration*).
    Manual: copy `custom_components/custom_device_page_components` into your
    configuration folder.

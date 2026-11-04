@@ -5,10 +5,10 @@
   "codeowners": ["@jacollins1"],
   "config_flow": true,
   "dependencies": ["frontend", "http", "websocket_api"],
-  "documentation": "https://github.com/jacollins1/custom-device-page-components",
+  "documentation": "https://github.com/jacollins1/ha-custom-device-page-components",
   "integration_type": "service",
   "iot_class": "calculated",
-  "issue_tracker": "https://github.com/jacollins1/custom-device-page-components/issues",
+  "issue_tracker": "https://github.com/jacollins1/ha-custom-device-page-components/issues",
   "requirements": [],
   "single_config_entry": true,
   "version": "0.1.0"
