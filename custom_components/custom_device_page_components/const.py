@@ -18,6 +18,11 @@ SUBENTRY_COMPONENT: Final = "component"
 # Options of the main entry (built-in components)
 CONF_RELATED: Final = "related_enabled"
 CONF_RELATED_ORDER: Final = "related_order"
+CONF_RELATED_COLUMN: Final = "related_column"
+CONF_COLOR_TEMP_KELVIN: Final = "color_temp_kelvin_enabled"
+CONF_COLOR_TEMP_MIREDS: Final = "color_temp_mireds_enabled"
+# Options of entries created before 0.1.2 (one box, one unit); read only by
+# the entry migration.
 CONF_COLOR_TEMP: Final = "color_temp_enabled"
 CONF_COLOR_TEMP_UNIT: Final = "color_temp_unit"
 CONF_COLOR_TEMP_MODELS: Final = "color_temp_models"
@@ -29,8 +34,9 @@ UNIT_MIREDS: Final = "mireds"
 DEFAULT_OPTIONS: Final = {
     CONF_RELATED: True,
     CONF_RELATED_ORDER: 0,
-    CONF_COLOR_TEMP: True,
-    CONF_COLOR_TEMP_UNIT: UNIT_KELVIN,
+    CONF_RELATED_COLUMN: 1,
+    CONF_COLOR_TEMP_KELVIN: True,
+    CONF_COLOR_TEMP_MIREDS: True,
     CONF_COLOR_TEMP_MODELS: [],
     CONF_BINDINGS: True,
 }
@@ -42,3 +48,11 @@ SIGNAL_ATTACH_REPORT: Final = f"{DOMAIN}_attach_report"
 SIGNAL_BINDINGS_UPDATED: Final = f"{DOMAIN}_bindings_updated"
 
 ISSUE_ATTACH_FAILED: Final = "attach_failed"
+
+# Unique-id kinds (last "_" segment of a unique id) of the built-in entities.
+KIND_CT_MIREDS: Final = "colortemp"
+KIND_CT_KELVIN: Final = "colortempk"
+KINDS_BINDINGS: Final = ("boundto", "boundfrom", "readbindings", "readall")
+
+# Device page columns a component can be placed in (1 = left).
+COLUMNS: Final = (1, 2, 3)

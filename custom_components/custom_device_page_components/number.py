@@ -1,6 +1,8 @@
-"""Built-in component: a Color temperature box on light device pages.
+"""Built-in component: Color temperature boxes on light device pages.
 
-One number entity per color-temperature light that belongs to a device. It
+Up to two number entities per color-temperature light that belongs to a
+device: one in mireds ("Color temperature") and one in kelvin ("Color
+temperature (kelvin)"), each switched on or off in the integration options. Each
 is linked to the light's device (Entity.device_entry), so it shows under
 Configuration on that device's page without adding this integration to the
 device. It reads the light's state and writes with light.turn_on, so it
@@ -25,13 +27,12 @@ from homeassistant.helpers.event import (
 )
 
 from .const import (
-    CONF_COLOR_TEMP,
+    CONF_COLOR_TEMP_KELVIN,
+    CONF_COLOR_TEMP_MIREDS,
     CONF_COLOR_TEMP_MODELS,
-    CONF_COLOR_TEMP_UNIT,
-    UNIT_MIREDS,
+    KIND_CT_KELVIN,
+    KIND_CT_MIREDS,
 )
-
-SUFFIX = "colortemp"
 
 
 def eligible_lights(hass: HomeAssistant, models: list[str]) -> list[er.RegistryEntry]:
@@ -62,10 +63,14 @@ async def async_setup_entry(
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     """Create boxes now and for lights added later."""
-    if not entry.options.get(CONF_COLOR_TEMP, True):
+    units = [
+        mireds
+        for mireds, key in ((True, CONF_COLOR_TEMP_MIREDS), (False, CONF_COLOR_TEMP_KELVIN))
+        if entry.options.get(key, True)
+    ]
+    if not units:
         return
     models = entry.options.get(CONF_COLOR_TEMP_MODELS, [])
-    mireds = entry.options.get(CONF_COLOR_TEMP_UNIT) == UNIT_MIREDS
     created: set[str] = set()
 
     @callback
@@ -74,6 +79,7 @@ async def async_setup_entry(
             ColorTempNumber(hass, light, mireds)
             for light in lights
             if light.id not in created
+            for mireds in units
         ]
         created.update(e.source_id for e in new)
         if new:
@@ -107,7 +113,8 @@ class ColorTempNumber(NumberEntity):
         self.hass = hass
         self.source_id = light.id
         self._mireds = mireds
-        self._attr_unique_id = f"{light.id}_{SUFFIX}"
+        self._attr_unique_id = f"{light.id}_{KIND_CT_MIREDS if mireds else KIND_CT_KELVIN}"
+        self._attr_translation_key = "color_temperature" if mireds else "color_temperature_kelvin"
         self.device_entry = dr.async_get(hass).async_get(light.device_id)
         caps = light.capabilities or {}
         kmin = caps.get("min_color_temp_kelvin") or 2000
@@ -130,7 +137,7 @@ class ColorTempNumber(NumberEntity):
             self._attr_translation_placeholders = {
                 "light": light.name or light.original_name or light.entity_id
             }
-            self._attr_translation_key = "color_temperature_of"
+            self._attr_translation_key = f"{self._attr_translation_key}_of"
         self._unsub_state = None
         self._unsub_reg = None
 

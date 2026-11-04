@@ -4,6 +4,8 @@
 
 - List style: the first column is the row's link and every other column is its own small grey line under it, styled like the Related card's subtitles. Empty cells are left out. (Previously all columns were joined into one link.)
 - A component shows at most 8 columns. The Columns step refuses more, and a stored component with more shows an error asking you to edit it.
+- Column placement: each component (in *Basics*) and the Related card (in the options) can go in device page column 1, 2 or 3. On a one-column (narrow) page the cards stack in column order. Existing components stay in column 1. The page's components are fetched once and shared by the column cards.
+- Color temperature: the unit choice is replaced by two switches, *(kelvin)* and *(mireds)*, both on for new installs. With both on, each light shows *Color temperature* (mireds) and *Color temperature (kelvin)*. Upgrading keeps the existing box and its entity id: a mireds install also gets the kelvin box; a kelvin install keeps only its kelvin box (turn mireds on in the options if wanted).
 
 ## 0.1.1 — 2026-11-04
 

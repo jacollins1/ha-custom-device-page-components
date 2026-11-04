@@ -16,7 +16,9 @@ from homeassistant.util import dt as dt_util
 from . import query
 from .actions import ActionRefused, action_level, async_run_action
 from .const import (
+    COLUMNS,
     CONF_RELATED,
+    CONF_RELATED_COLUMN,
     CONF_RELATED_ORDER,
     DOMAIN,
     ISSUE_ATTACH_FAILED,
@@ -137,6 +139,7 @@ class Runtime:
                     "type": "related",
                     "title": "Related helpers, integrations and dashboards",
                     "order": int(opts.get(CONF_RELATED_ORDER, 0)),
+                    "column": _column(opts.get(CONF_RELATED_COLUMN, 1)),
                     "related": related,
                 }
             )
@@ -158,6 +161,7 @@ class Runtime:
             "type": "query",
             "title": spec.get("title") or spec.get("name") or "Component",
             "order": int(spec.get("order", 10)),
+            "column": _column(spec.get("column", 1)),
             "style": spec.get("style", "table"),
             "empty_text": spec.get("empty_text") or "Nothing to show",
             "labels": [],
@@ -266,3 +270,12 @@ class Runtime:
                 },
             )
         async_dispatcher_send(self.hass, SIGNAL_ATTACH_REPORT)
+
+
+def _column(value: Any) -> int:
+    """Device page column 1-3 (anything else = 1)."""
+    try:
+        col = int(value)
+    except (TypeError, ValueError):
+        return 1
+    return col if col in COLUMNS else 1

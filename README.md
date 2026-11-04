@@ -29,14 +29,19 @@ stops appearing (device pages keep working) and Home Assistant shows a
   device or one of its entities, the device's own integration entry, group
   helpers whose members include its entities, and every dashboard view that
   shows the device or one of its entities.
-- **Color temperature**: a box under *Configuration* on every light device
-  with a color-temperature light. Shows the current value; typing a value
-  turns the light on at that temperature. Kelvin or mireds; optionally only
-  for chosen models.
+- **Color temperature**: boxes under *Configuration* on every light device
+  with a color-temperature light: *Color temperature* (mireds) and *Color
+  temperature (kelvin)*, each switched on or off in the options (both on by
+  default). They show the current value; typing a value turns the light on at
+  that temperature. Optionally only for chosen models.
 - **Zigbee bindings (ZHA)**: *Zigbee bound to*, *Zigbee bound from* and
   *Read Zigbee bindings* on every ZHA device, plus *Read all Zigbee
   bindings* on the integration's own device. Reads only happen when you press
   a button; nothing is bound or unbound.
+
+**Placement**: each component, and the Related card, goes at the bottom of
+device page column 1 (left), 2 (middle) or 3 (right). On narrow screens Home
+Assistant shows a single column; cards then stack in column order.
 
 **Your own components**: *Add component* on the integration's page opens a
 builder:

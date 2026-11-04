@@ -7,15 +7,17 @@
         "data": {
           "related_enabled": "Related helpers, integration entries and dashboards card",
           "related_order": "Position of the Related card (lower = higher up)",
-          "color_temp_enabled": "Color temperature box on light devices",
-          "color_temp_unit": "Color temperature unit",
+          "related_column": "Device page column of the Related card",
+          "color_temp_kelvin_enabled": "Color temperature box on light devices (kelvin)",
+          "color_temp_mireds_enabled": "Color temperature box on light devices (mireds)",
           "color_temp_models": "Only these models (empty = every color-temperature light)",
           "bindings_enabled": "Zigbee bindings (ZHA): Bound to / Bound from / Read bindings"
         },
         "data_description": {
           "related_order": "Cards are sorted by this number; custom components default to 10.",
           "color_temp_models": "Pick models, or type a model or model ID.",
-          "bindings_enabled": "Reads binding tables only when you press a button. Uses ZHA internals, so a ZHA update can break this part on its own."
+          "bindings_enabled": "Reads binding tables only when you press a button. Uses ZHA internals, so a ZHA update can break this part on its own.",
+          "color_temp_mireds_enabled": "With both on, each light shows both boxes; they always show the same temperature."
         }
       }
     },
@@ -31,15 +33,17 @@
         "data": {
           "related_enabled": "Related helpers, integration entries and dashboards card",
           "related_order": "Position of the Related card (lower = higher up)",
-          "color_temp_enabled": "Color temperature box on light devices",
-          "color_temp_unit": "Color temperature unit",
+          "related_column": "Device page column of the Related card",
+          "color_temp_kelvin_enabled": "Color temperature box on light devices (kelvin)",
+          "color_temp_mireds_enabled": "Color temperature box on light devices (mireds)",
           "color_temp_models": "Only these models (empty = every color-temperature light)",
           "bindings_enabled": "Zigbee bindings (ZHA): Bound to / Bound from / Read bindings"
         },
         "data_description": {
           "related_order": "Cards are sorted by this number; custom components default to 10.",
           "color_temp_models": "Pick models, or type a model or model ID.",
-          "bindings_enabled": "Reads binding tables only when you press a button. Uses ZHA internals, so a ZHA update can break this part on its own."
+          "bindings_enabled": "Reads binding tables only when you press a button. Uses ZHA internals, so a ZHA update can break this part on its own.",
+          "color_temp_mireds_enabled": "With both on, each light shows both boxes; they always show the same temperature."
         }
       },
       "confirm_remove": {
@@ -68,9 +72,13 @@
             "name": "Name",
             "title": "Card title (defaults to the name)",
             "style": "Show rows as",
+            "column": "Device page column",
             "order": "Position (lower = higher up)",
             "enabled": "Show this component",
             "empty_text": "Text when there are no rows"
+          },
+          "data_description": {
+            "column": "On narrow screens Home Assistant shows one column; cards from columns 2 and 3 then follow those from column 1."
           }
         },
         "menu": {
@@ -305,6 +313,12 @@
       },
       "color_temperature_of": {
         "name": "Color temperature ({light})"
+      },
+      "color_temperature_kelvin": {
+        "name": "Color temperature (kelvin)"
+      },
+      "color_temperature_kelvin_of": {
+        "name": "Color temperature ({light}, kelvin)"
       }
     },
     "sensor": {

@@ -36,18 +36,21 @@ from homeassistant.helpers.selector import (
 from . import query
 from .actions import action_level, available_actions
 from .const import (
+    COLUMNS,
     CONF_BINDINGS,
-    CONF_COLOR_TEMP,
+    CONF_COLOR_TEMP_KELVIN,
+    CONF_COLOR_TEMP_MIREDS,
     CONF_COLOR_TEMP_MODELS,
-    CONF_COLOR_TEMP_UNIT,
     CONF_RELATED,
+    CONF_RELATED_COLUMN,
     CONF_RELATED_ORDER,
     DEFAULT_OPTIONS,
     DOMAIN,
+    KIND_CT_KELVIN,
+    KIND_CT_MIREDS,
+    KINDS_BINDINGS,
     NAME,
     SUBENTRY_COMPONENT,
-    UNIT_KELVIN,
-    UNIT_MIREDS,
 )
 from .filters import STATUS_VALUES, integration_options, type_options
 
@@ -79,16 +82,42 @@ def _builtin_schema(hass, defaults: dict[str, Any]) -> vol.Schema:
             ): NumberSelector(
                 NumberSelectorConfig(min=-100, max=100, mode=NumberSelectorMode.BOX)
             ),
-            vol.Required(CONF_COLOR_TEMP, default=defaults[CONF_COLOR_TEMP]): BooleanSelector(),
             vol.Required(
-                CONF_COLOR_TEMP_UNIT, default=defaults[CONF_COLOR_TEMP_UNIT]
-            ): _select([UNIT_KELVIN, UNIT_MIREDS], dropdown=False),
+                CONF_RELATED_COLUMN, default=str(defaults[CONF_RELATED_COLUMN])
+            ): _column_select(),
+            vol.Required(
+                CONF_COLOR_TEMP_KELVIN, default=defaults[CONF_COLOR_TEMP_KELVIN]
+            ): BooleanSelector(),
+            vol.Required(
+                CONF_COLOR_TEMP_MIREDS, default=defaults[CONF_COLOR_TEMP_MIREDS]
+            ): BooleanSelector(),
             vol.Optional(
                 CONF_COLOR_TEMP_MODELS, default=defaults[CONF_COLOR_TEMP_MODELS]
             ): _select(models, multiple=True, custom=True),
             vol.Required(CONF_BINDINGS, default=defaults[CONF_BINDINGS]): BooleanSelector(),
         }
     )
+
+
+def _column_select() -> SelectSelector:
+    """Device page column: 1 (left), 2 (middle) or 3 (right)."""
+    return _select(
+        [
+            SelectOptionDict(value="1", label="1 (left, under Device info)"),
+            SelectOptionDict(value="2", label="2 (middle, under Configuration)"),
+            SelectOptionDict(value="3", label="3 (right, under Activity)"),
+        ],
+        dropdown=False,
+    )
+
+
+def _column(value: Any) -> int:
+    """A stored column number (1-3); anything else is column 1."""
+    try:
+        col = int(value)
+    except (TypeError, ValueError):
+        return 1
+    return col if col in COLUMNS else 1
 
 
 def _ct_models(hass) -> list[str]:
@@ -111,6 +140,7 @@ def _ct_models(hass) -> list[str]:
 def _clean(user_input: dict[str, Any]) -> dict[str, Any]:
     out = dict(user_input)
     out[CONF_RELATED_ORDER] = int(out.get(CONF_RELATED_ORDER, 0))
+    out[CONF_RELATED_COLUMN] = _column(out.get(CONF_RELATED_COLUMN, 1))
     return out
 
 
@@ -118,6 +148,7 @@ class CDPCConfigFlow(ConfigFlow, domain=DOMAIN):
     """Set up the integration (one entry per Home Assistant)."""
 
     VERSION = 1
+    MINOR_VERSION = 2
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
@@ -175,12 +206,13 @@ class CDPCOptionsFlow(OptionsFlowWithReload):
         out = []
         for e in mine:
             kind = (e.unique_id or "").rsplit("_", 1)[-1]
-            if old[CONF_COLOR_TEMP] and not new[CONF_COLOR_TEMP] and kind == "colortemp":
-                out.append(e.entity_id)
-            if old[CONF_BINDINGS] and not new[CONF_BINDINGS] and kind in (
-                "boundto", "boundfrom", "readbindings", "readall"
+            for key, kinds in (
+                (CONF_COLOR_TEMP_MIREDS, (KIND_CT_MIREDS,)),
+                (CONF_COLOR_TEMP_KELVIN, (KIND_CT_KELVIN,)),
+                (CONF_BINDINGS, KINDS_BINDINGS),
             ):
-                out.append(e.entity_id)
+                if old[key] and not new[key] and kind in kinds:
+                    out.append(e.entity_id)
         return out
 
     async def async_step_confirm_remove(
@@ -223,6 +255,7 @@ EMPTY_SPEC: dict[str, Any] = {
     "name": "",
     "title": "",
     "style": "table",
+    "column": 1,
     "order": 10,
     "enabled": True,
     "empty_text": "",
@@ -404,6 +437,7 @@ class ComponentFlow(ConfigSubentryFlow):
                 name=user_input["name"].strip(),
                 title=(user_input.get("title") or user_input["name"]).strip(),
                 style=user_input["style"],
+                column=_column(user_input.get("column", 1)),
                 order=int(user_input["order"]),
                 enabled=user_input["enabled"],
                 empty_text=user_input.get("empty_text", ""),
@@ -421,6 +455,9 @@ class ComponentFlow(ConfigSubentryFlow):
                          SelectOptionDict(value="list", label="List")],
                         dropdown=False,
                     ),
+                    vol.Required(
+                        "column", default=str(_column(s.get("column", 1)))
+                    ): _column_select(),
                     vol.Required("order", default=s["order"]): NumberSelector(
                         NumberSelectorConfig(min=-100, max=100, mode=NumberSelectorMode.BOX)
                     ),

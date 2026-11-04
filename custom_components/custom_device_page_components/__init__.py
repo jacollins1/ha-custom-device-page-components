@@ -30,11 +30,19 @@ from .bindings import BindingsManager
 from .const import (
     CONF_BINDINGS,
     CONF_COLOR_TEMP,
+    CONF_COLOR_TEMP_KELVIN,
+    CONF_COLOR_TEMP_MIREDS,
+    CONF_COLOR_TEMP_UNIT,
+    CONF_RELATED_COLUMN,
     DOMAIN,
     FRONTEND_FILE,
     ISSUE_ATTACH_FAILED,
+    KIND_CT_KELVIN,
+    KIND_CT_MIREDS,
+    KINDS_BINDINGS,
     SIGNAL_ATTACH_REPORT,
     STATIC_URL,
+    UNIT_MIREDS,
 )
 from .runtime import Runtime
 from .websocket import async_register_websocket
@@ -136,15 +144,47 @@ def _remove_disabled_builtins(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """
     ent_reg = er.async_get(hass)
     drop: set[str] = set()
-    if not entry.options.get(CONF_COLOR_TEMP, True):
-        drop.add("colortemp")
+    if not entry.options.get(CONF_COLOR_TEMP_MIREDS, True):
+        drop.add(KIND_CT_MIREDS)
+    if not entry.options.get(CONF_COLOR_TEMP_KELVIN, True):
+        drop.add(KIND_CT_KELVIN)
     if not entry.options.get(CONF_BINDINGS, True):
-        drop |= {"boundto", "boundfrom", "readbindings", "readall"}
+        drop |= set(KINDS_BINDINGS)
     if not drop:
         return
     for reg in er.async_entries_for_config_entry(ent_reg, entry.entry_id):
         if (reg.unique_id or "").rsplit("_", 1)[-1] in drop:
             ent_reg.async_remove(reg.entity_id)
+
+
+async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Bring entries made by older versions up to date."""
+    if entry.version > 1:
+        return False  # made by a newer version of this integration
+    if entry.minor_version < 2:
+        # 0.1.0-0.1.1: one Color temperature box in one unit. Now a mireds and
+        # a kelvin box can be on together. The existing box keeps its entity
+        # id and history: in kelvin installs it becomes the kelvin box. New
+        # installs get both; existing ones keep the unit they chose, plus
+        # kelvin when they had chosen mireds (Home Assistant's own unit).
+        opts = dict(entry.options)
+        enabled = bool(opts.pop(CONF_COLOR_TEMP, True))
+        mireds = opts.pop(CONF_COLOR_TEMP_UNIT, None) == UNIT_MIREDS
+        opts.setdefault(CONF_COLOR_TEMP_MIREDS, enabled and mireds)
+        opts.setdefault(CONF_COLOR_TEMP_KELVIN, enabled)
+        opts.setdefault(CONF_RELATED_COLUMN, 1)
+        if not mireds:
+
+            @callback
+            def _to_kelvin(reg: er.RegistryEntry) -> dict[str, str] | None:
+                if (reg.unique_id or "").endswith(f"_{KIND_CT_MIREDS}"):
+                    return {"new_unique_id": f"{reg.unique_id}k"}
+                return None
+
+            await er.async_migrate_entries(hass, entry.entry_id, _to_kelvin)
+        hass.config_entries.async_update_entry(entry, options=opts, minor_version=2)
+        _LOGGER.debug("Migrated %s to 1.2", entry.entry_id)
+    return True
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: CDPCConfigEntry) -> bool:

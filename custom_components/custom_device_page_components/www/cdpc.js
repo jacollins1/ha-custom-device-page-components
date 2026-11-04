@@ -3,8 +3,8 @@
  *
  * Loaded on every page by the integration (frontend.add_extra_js_url).
  * It waits for Home Assistant's device page element, adds one card element
- * to its first column after each render, and tells the integration whether
- * that worked. If a frontend update changes the device page, the card does
+ * to each of its columns after every render (each shows the components
+ * placed in that column), and tells the integration whether that worked. If a frontend update changes the device page, the card does
  * not appear and Home Assistant shows a Repair issue instead.
  */
 const CDPC_VERSION = "0.1.2";
@@ -59,12 +59,79 @@ function attach(page) {
     return;
   }
   clearTimeout(page.__cdpcFailTimer);
-  let card = root.querySelector(CARD_TAG);
-  if (!card) card = document.createElement(CARD_TAG);
-  if (card.parentNode !== columns[0]) columns[0].appendChild(card);
-  card.hass = hass;
-  card.deviceId = page.deviceId;
+  const store = storeFor(page);
+  store.hass = hass;
+  const hosts = [...root.querySelectorAll(CARD_TAG)];
+  columns.forEach((column, index) => {
+    let card = hosts.find((h) => h.column === index);
+    if (!card) {
+      card = document.createElement(CARD_TAG);
+      card.column = index;
+    }
+    // Always the last card of its column, after Home Assistant's own.
+    if (card.parentNode !== column || column.lastElementChild !== card) column.appendChild(card);
+    card.columns = columns.length;
+    card.store = store;
+  });
+  // The page went from 3 columns to 1 (or back): drop hosts of gone columns.
+  for (const h of hosts) if (h.column >= columns.length) h.remove();
+  store.setDevice(page.deviceId);
   report(hass, true);
+}
+
+// One data store per device page, shared by the page's column cards, so the
+// device's components are fetched once per load.
+function storeFor(page) {
+  if (!page.__cdpcStore) page.__cdpcStore = new CdpcStore();
+  return page.__cdpcStore;
+}
+
+class CdpcStore {
+  constructor() {
+    this.hass = null;
+    this.deviceId = null;
+    this.data = null;
+    this.error = null;
+    this.loading = false;
+    this.cards = new Set();
+  }
+
+  setDevice(id) {
+    if (id === this.deviceId) return;
+    this.deviceId = id;
+    this.data = null;
+    this.error = null;
+    this.load();
+  }
+
+  async load() {
+    if (!this.hass || !this.deviceId) return;
+    const id = this.deviceId;
+    this.loading = true;
+    this.changed();
+    try {
+      const data = await this.hass.callWS({ type: `${DOMAIN}/device`, device_id: id });
+      if (id !== this.deviceId) return;
+      this.data = data;
+      this.error = null;
+    } catch (err) {
+      this.error = (err && err.message) || String(err);
+    }
+    this.loading = false;
+    this.changed();
+  }
+
+  changed() {
+    for (const card of this.cards) card._render();
+  }
+}
+
+// Column (0-based) a component goes in when the page has `count` columns.
+// With fewer columns than chosen, it goes in the last one there is: on a
+// one-column (narrow) page everything stacks, column 1 components first.
+function columnIndex(comp, count) {
+  const wanted = [1, 2, 3].includes(comp.column) ? comp.column : 1;
+  return Math.min(wanted, count) - 1;
 }
 
 async function install() {
@@ -129,46 +196,43 @@ class CdpcDeviceComponents extends HTMLElement {
   constructor() {
     super();
     this.attachShadow({ mode: "open" });
-    this._hass = null;
-    this._deviceId = null;
-    this._data = null;
-    this._error = null;
+    this.column = 0; // 0-based column of the device page this card sits in
+    this.columns = 1; // how many columns the page has right now
+    this._store = null;
     this._pending = {}; // "comp|action|row" -> confirming
-    this._loading = false;
     // ShadowRoot has no onclick property; listen once for every render.
     this.shadowRoot.addEventListener("click", (ev) => this._click(ev));
   }
 
-  set hass(h) {
-    this._hass = h;
+  set store(store) {
+    if (store === this._store) return;
+    if (this._store) this._store.cards.delete(this);
+    this._store = store;
+    store.cards.add(this);
+    this._render();
   }
 
-  set deviceId(id) {
-    if (id === this._deviceId) return;
-    this._deviceId = id;
-    this._data = null;
-    this._load();
+  get _hass() {
+    return this._store && this._store.hass;
+  }
+
+  get _deviceId() {
+    return this._store && this._store.deviceId;
+  }
+
+  _load() {
+    return this._store ? this._store.load() : Promise.resolve();
+  }
+
+  disconnectedCallback() {
+    if (this._store && !this.isConnected) this._store.cards.delete(this);
   }
 
   connectedCallback() {
-    if (this._deviceId && !this._data && !this._loading) this._load();
-  }
-
-  async _load() {
-    if (!this._hass || !this._deviceId) return;
-    const id = this._deviceId;
-    this._loading = true;
-    this._render();
-    try {
-      const data = await this._hass.callWS({ type: `${DOMAIN}/device`, device_id: id });
-      if (id !== this._deviceId) return;
-      this._data = data;
-      this._error = null;
-    } catch (err) {
-      this._error = (err && err.message) || String(err);
+    if (this._store) {
+      this._store.cards.add(this);
+      this._render();
     }
-    this._loading = false;
-    this._render();
   }
 
   _linkHtml(link, text) {
@@ -251,16 +315,29 @@ class CdpcDeviceComponents extends HTMLElement {
 
   _render() {
     const root = this.shadowRoot;
+    const store = this._store;
     let html = `<style>${STYLE}</style>`;
-    if (this._error) {
-      html += `<ha-card outlined><div class="card-header">Device page components</div>
-        <div class="content error">${esc(this._error)}</div></ha-card>`;
-    } else if (!this._data) {
-      html += this._loading
-        ? `<ha-card outlined><div class="card-header">Related</div><div class="content empty">Loading…</div></ha-card>`
-        : "";
+    if (!store) {
+      root.innerHTML = html;
+      return;
+    }
+    if (store.error) {
+      if (this.column === 0)
+        html += `<ha-card outlined><div class="card-header">Device page components</div>
+          <div class="content error">${esc(store.error)}</div></ha-card>`;
+    } else if (!store.data) {
+      if (store.loading && this.column === 0)
+        html += `<ha-card outlined><div class="card-header">Related</div><div class="content empty">Loading…</div></ha-card>`;
     } else {
-      html += this._data.components
+      const count = this.columns;
+      // Server order is by position; within one stacked (narrow) column the
+      // cards follow their chosen column first, like Home Assistant's own.
+      const mine = store.data.components
+        .map((comp, i) => ({ comp, i }))
+        .filter(({ comp }) => columnIndex(comp, count) === this.column)
+        .sort((a, b) => (a.comp.column || 1) - (b.comp.column || 1) || a.i - b.i)
+        .map(({ comp }) => comp);
+      html += mine
         .map(
           (comp, i) => `<ha-card outlined><div class="card-header"><span>${esc(comp.title)}</span>
             ${i === 0 ? `<button class="refresh" title="Refresh" data-refresh="1">↻</button>` : ""}</div>

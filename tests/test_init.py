@@ -12,9 +12,17 @@ from homeassistant.setup import async_setup_component
 
 from custom_components.custom_device_page_components.const import DOMAIN
 
+# Options as 0.1.0/0.1.1 stored them (one box, one unit): the fixture's entry
+# goes through the 1.1 -> 1.2 migration on setup.
 OPTS = {
     "related_enabled": True, "related_order": 0, "color_temp_enabled": True,
     "color_temp_unit": "mireds", "color_temp_models": [], "bindings_enabled": False,
+}
+# The options form today.
+NEW_OPTS = {
+    "related_enabled": True, "related_order": 0, "related_column": "1",
+    "color_temp_kelvin_enabled": True, "color_temp_mireds_enabled": True,
+    "color_temp_models": [], "bindings_enabled": False,
 }
 
 COMPONENT = {
@@ -77,20 +85,80 @@ async def test_module_registered(hass, setup):
     assert url.startswith("/custom_device_page_components_static/cdpc.js?v=")
 
 
-async def test_color_temp_box_on_device(hass, setup):
+async def test_color_temp_boxes_on_device(hass, setup):
+    """A mireds and a kelvin box, both showing the light's temperature."""
     reg = er.async_get(hass)
-    num = [e for e in er.async_entries_for_device(reg, setup["dev"].id) if e.domain == "number"]
-    assert len(num) == 1 and num[0].config_entry_id == setup["entry"].entry_id
-    state = hass.states.get(num[0].entity_id)
-    assert state.state == "370"  # floor(1e6 / 2702)
-    assert state.attributes["min"] == 153 and state.attributes["max"] == 500
+    num = {e.unique_id.rsplit("_", 1)[-1]: e
+           for e in er.async_entries_for_device(reg, setup["dev"].id) if e.domain == "number"}
+    assert set(num) == {"colortemp", "colortempk"}
+    assert all(e.config_entry_id == setup["entry"].entry_id for e in num.values())
+    mired = hass.states.get(num["colortemp"].entity_id)
+    kelvin = hass.states.get(num["colortempk"].entity_id)
+    assert mired.state == "370"  # floor(1e6 / 2702)
+    assert mired.attributes["min"] == 153 and mired.attributes["max"] == 500
+    assert mired.attributes["unit_of_measurement"] == "mired"
+    assert mired.attributes["friendly_name"].endswith("Color temperature")
+    assert kelvin.state == "2702"
+    assert kelvin.attributes["min"] == 2000 and kelvin.attributes["max"] == 6535
+    assert kelvin.attributes["unit_of_measurement"] == "K"
+    assert kelvin.attributes["friendly_name"].endswith("Color temperature (kelvin)")
+    assert num["colortempk"].entity_id.endswith("_color_temperature_kelvin")
     # ZHA stays the only integration on the device
     assert dr.async_get(hass).async_get(setup["dev"].id).config_entry_id == setup["dev"].config_entry_id
 
     calls = []
     hass.services.async_register("light", "turn_on", lambda c: calls.append(c))
-    await hass.services.async_call("number", "set_value", {"entity_id": num[0].entity_id, "value": 370}, blocking=True)
-    assert calls[0].data["color_temp_kelvin"] == 2702
+    await hass.services.async_call("number", "set_value", {"entity_id": num["colortemp"].entity_id, "value": 370}, blocking=True)
+    assert calls[-1].data["color_temp_kelvin"] == 2702
+    await hass.services.async_call("number", "set_value", {"entity_id": num["colortempk"].entity_id, "value": 3000}, blocking=True)
+    assert calls[-1].data["color_temp_kelvin"] == 3000
+
+
+async def test_migration_from_single_unit(hass, setup):
+    """A 0.1.1 mireds entry keeps its box and gains the kelvin one."""
+    entry = setup["entry"]
+    assert entry.minor_version == 2
+    assert "color_temp_enabled" not in entry.options and "color_temp_unit" not in entry.options
+    assert entry.options["color_temp_mireds_enabled"] is True
+    assert entry.options["color_temp_kelvin_enabled"] is True
+    assert entry.options["related_column"] == 1
+
+
+async def test_migration_keeps_kelvin_box(hass):
+    """A 0.1.1 kelvin entry: the existing box becomes the kelvin box (same entity id)."""
+    await async_setup_component(hass, "http", {})
+    await async_setup_component(hass, "websocket_api", {})
+    hass.config.components.add("frontend")
+    hass.data.setdefault("frontend_extra_module_url", set())
+    other = MockConfigEntry(domain="zha", title="Zigbee")
+    other.add_to_hass(hass)
+    dev = dr.async_get(hass).async_get_or_create(
+        config_entry_id=other.entry_id, identifiers={("zha", "00:22")}, model="LCB002", name="Bulb",
+    )
+    light = er.async_get(hass).async_get_or_create(
+        "light", "zha", "bulb2", device_id=dev.id, config_entry=other,
+        capabilities={"supported_color_modes": ["color_temp"],
+                      "min_color_temp_kelvin": 2000, "max_color_temp_kelvin": 6500},
+    )
+    hass.states.async_set(light.entity_id, "on", {"color_mode": "color_temp", "color_temp_kelvin": 4000})
+    entry = MockConfigEntry(
+        domain=DOMAIN, title="Custom Device Page Components",
+        options={**OPTS, "color_temp_unit": "kelvin"},
+    )
+    entry.add_to_hass(hass)
+    old = er.async_get(hass).async_get_or_create(
+        "number", DOMAIN, f"{light.id}_colortemp", config_entry=entry,
+        suggested_object_id="bulb_color_temperature",
+    )
+    with patch("custom_components.custom_device_page_components.add_extra_js_url"):
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+    reg = er.async_get(hass)
+    assert entry.options["color_temp_kelvin_enabled"] is True
+    assert entry.options["color_temp_mireds_enabled"] is False
+    mine = [e for e in er.async_entries_for_config_entry(reg, entry.entry_id) if e.domain == "number"]
+    assert [(e.entity_id, e.unique_id) for e in mine] == [(old.entity_id, f"{light.id}_colortempk")]
+    assert hass.states.get(old.entity_id).state == "4000"
 
 
 async def test_device_payload(hass, setup, hass_ws_client):
@@ -99,6 +167,8 @@ async def test_device_payload(hass, setup, hass_ws_client):
     res = (await client.receive_json())["result"]
     ids = [c["id"] for c in res["components"]]
     assert ids[0] == "related"
+    # components saved before 0.1.2 have no column: they stay in column 1
+    assert [c["column"] for c in res["components"]] == [1] * len(ids)
     related = res["components"][0]["related"]
     titles = {r["title"] for r in related["entries"]}
     assert {"Zigbee", "Kitchen AL"} <= titles
@@ -168,7 +238,7 @@ async def test_builder_flow(hass, setup):
     mgr = hass.config_entries.subentries
     r = await mgr.async_init((entry.entry_id, "component"), context={"source": "user"})
     assert r["step_id"] == "basics"
-    r = await mgr.async_configure(r["flow_id"], {"name": "Areas", "style": "list", "order": 3, "enabled": True})
+    r = await mgr.async_configure(r["flow_id"], {"name": "Areas", "style": "list", "column": "3", "order": 3, "enabled": True})
     assert r["type"] == "menu"
     r = await mgr.async_configure(r["flow_id"], {"next_step_id": "source"})
     r = await mgr.async_configure(r["flow_id"], {"table": "devices"})
@@ -197,14 +267,17 @@ async def test_builder_flow(hass, setup):
     r = await mgr.async_configure(r["flow_id"], {})
     assert r["type"] == "create_entry"
     assert len(entry.subentries) == 2
+    new = next(s for s in entry.subentries.values() if s.title == "Areas")
+    assert new.data["column"] == 3
 
 
 async def test_options_warn_before_delete(hass, setup):
     entry = setup["entry"]
     r = await hass.config_entries.options.async_init(entry.entry_id)
-    r = await hass.config_entries.options.async_configure(r["flow_id"], {**OPTS, "color_temp_enabled": False})
+    r = await hass.config_entries.options.async_configure(r["flow_id"], {**NEW_OPTS, "color_temp_mireds_enabled": False})
     assert r["step_id"] == "confirm_remove"
     assert r["description_placeholders"]["count"] == "1"
+    assert "_color_temperature`" in r["description_placeholders"]["entities"]
     r = await hass.config_entries.options.async_configure(r["flow_id"], {"confirm": False})
     assert r["errors"] == {"base": "confirm_required"}
     with patch("custom_components.custom_device_page_components.add_extra_js_url"):
@@ -212,7 +285,9 @@ async def test_options_warn_before_delete(hass, setup):
         await hass.async_block_till_done()
     assert r["type"] == "create_entry"
     reg = er.async_get(hass)
-    assert not [e for e in er.async_entries_for_device(reg, setup["dev"].id) if e.domain == "number"]
+    left = [e.unique_id.rsplit("_", 1)[-1] for e in er.async_entries_for_device(reg, setup["dev"].id) if e.domain == "number"]
+    assert left == ["colortempk"]  # only the mireds box was removed
+    assert entry.options["related_column"] == 1
 
 
 async def test_related_dashboards_and_yaml_groups(hass, setup, hass_ws_client, hass_storage):
