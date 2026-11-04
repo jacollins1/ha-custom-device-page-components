@@ -1,0 +1,335 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Custom Device Page Components",
+        "description": "Adds cards to device pages. Everything it shows is read-only, and only administrators see device pages. You can add your own components afterwards with **Add component**.",
+        "data": {
+          "related_enabled": "Related helpers, integration entries and dashboards card",
+          "related_order": "Position of the Related card (lower = higher up)",
+          "color_temp_enabled": "Color temperature box on light devices",
+          "color_temp_unit": "Color temperature unit",
+          "color_temp_models": "Only these models (empty = every color-temperature light)",
+          "bindings_enabled": "Zigbee bindings (ZHA): Bound to / Bound from / Read bindings"
+        },
+        "data_description": {
+          "related_order": "Cards are sorted by this number; custom components default to 10.",
+          "color_temp_models": "Pick models, or type a model or model ID.",
+          "bindings_enabled": "Reads binding tables only when you press a button. Uses ZHA internals, so a ZHA update can break this part on its own."
+        }
+      }
+    },
+    "abort": {
+      "single_instance_allowed": "Already set up. Use Configure or Add component.",
+      "already_configured": "Already set up."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Built-in components",
+        "data": {
+          "related_enabled": "Related helpers, integration entries and dashboards card",
+          "related_order": "Position of the Related card (lower = higher up)",
+          "color_temp_enabled": "Color temperature box on light devices",
+          "color_temp_unit": "Color temperature unit",
+          "color_temp_models": "Only these models (empty = every color-temperature light)",
+          "bindings_enabled": "Zigbee bindings (ZHA): Bound to / Bound from / Read bindings"
+        },
+        "data_description": {
+          "related_order": "Cards are sorted by this number; custom components default to 10.",
+          "color_temp_models": "Pick models, or type a model or model ID.",
+          "bindings_enabled": "Reads binding tables only when you press a button. Uses ZHA internals, so a ZHA update can break this part on its own."
+        }
+      },
+      "confirm_remove": {
+        "title": "Delete entities?",
+        "description": "This change **deletes {count} entities** created by this integration:\n\n{entities}\n\nDashboards, automations and scripts that use them will show them as unavailable. Turning the option back on creates them again, but their history is not restored.",
+        "data": {
+          "confirm": "Yes, delete them"
+        }
+      }
+    },
+    "error": {
+      "confirm_required": "Tick the box to confirm, or close this dialog to cancel."
+    }
+  },
+  "config_subentries": {
+    "component": {
+      "initiate_flow": {
+        "user": "Add component",
+        "reconfigure": "Edit component"
+      },
+      "entry_type": "Component",
+      "step": {
+        "basics": {
+          "title": "Component basics",
+          "data": {
+            "name": "Name",
+            "title": "Card title (defaults to the name)",
+            "style": "Show rows as",
+            "order": "Position (lower = higher up)",
+            "enabled": "Show this component",
+            "empty_text": "Text when there are no rows"
+          }
+        },
+        "menu": {
+          "title": "Build the component",
+          "description": "{summary}",
+          "menu_options": {
+            "basics": "Name and look",
+            "source": "Source table (FROM)",
+            "joins": "Joins (JOIN)",
+            "where": "Conditions (WHERE)",
+            "group": "Grouping and summaries (GROUP BY)",
+            "sort": "Sorting and row limit (ORDER BY, LIMIT)",
+            "columns": "Columns and row link",
+            "actions": "Row actions",
+            "devices": "Which device pages",
+            "preview": "Preview",
+            "save": "Save"
+          }
+        },
+        "source": {
+          "title": "Source table",
+          "description": "The table each row of the card comes from.",
+          "data": {
+            "table": "Table"
+          }
+        },
+        "source_confirm": {
+          "title": "Change the source table?",
+          "description": "Changing the source table **removes every join, condition, summary, sort, column, row link and action** built on the old table. Name, look and device-page filters are kept.\n\nCurrent component:\n\n{summary}",
+          "data": {
+            "confirm": "Yes, remove them and change the table"
+          }
+        },
+        "joins": {
+          "title": "Joins",
+          "description": "{summary}",
+          "menu_options": {
+            "add_join": "Add a join",
+            "remove_join": "Remove a join",
+            "menu": "Back"
+          }
+        },
+        "add_join": {
+          "title": "Add a join",
+          "data": {
+            "type": "Join type",
+            "table": "Table to join"
+          }
+        },
+        "add_join_on": {
+          "title": "Match rows",
+          "description": "Rows of {table} are matched where these two columns are equal.",
+          "data": {
+            "left": "Column already in the query",
+            "right": "Column of {table}"
+          }
+        },
+        "remove_join": {
+          "title": "Remove a join",
+          "description": "These parts use the join's columns and are removed with it:\n\n{dependents}",
+          "data": {
+            "join": "Join",
+            "confirm": "Remove the join and everything that uses it"
+          }
+        },
+        "where": {
+          "title": "Conditions",
+          "description": "{summary}",
+          "menu_options": {
+            "add_condition": "Add a condition",
+            "remove_condition": "Remove conditions",
+            "where_match": "All or any",
+            "menu": "Back"
+          }
+        },
+        "add_condition": {
+          "title": "Add a condition",
+          "data": {
+            "column": "Column",
+            "op": "Comparison",
+            "value_source": "Compare with",
+            "value": "Value"
+          },
+          "data_description": {
+            "value": "Used when 'Compare with' is 'A value I type'. For 'is one of', separate values with commas."
+          }
+        },
+        "remove_condition": {
+          "title": "Remove conditions",
+          "data": {
+            "conditions": "Conditions to remove"
+          }
+        },
+        "where_match": {
+          "title": "All or any",
+          "data": {
+            "match": "Rows must match"
+          }
+        },
+        "group": {
+          "title": "Grouping and summaries",
+          "description": "{summary}",
+          "menu_options": {
+            "group_by": "Group rows by…",
+            "add_aggregate": "Add a summary column",
+            "remove_aggregate": "Remove a summary column",
+            "menu": "Back"
+          }
+        },
+        "group_by": {
+          "title": "Group rows",
+          "description": "Rows with the same values in these columns become one row. Shown columns must be grouped or be summaries.",
+          "data": {
+            "group_by": "Group by"
+          }
+        },
+        "add_aggregate": {
+          "title": "Add a summary column",
+          "data": {
+            "func": "Summary",
+            "column": "Of column",
+            "label": "Column header"
+          }
+        },
+        "remove_aggregate": {
+          "title": "Remove a summary column",
+          "data": {
+            "aggregate": "Summary column"
+          }
+        },
+        "sort": {
+          "title": "Sorting and row limit",
+          "data": {
+            "sort1": "Sort by",
+            "dir1": "Direction",
+            "sort2": "Then by",
+            "dir2": "Direction",
+            "sort3": "Then by",
+            "dir3": "Direction",
+            "limit": "Show at most this many rows"
+          }
+        },
+        "columns": {
+          "title": "Columns",
+          "data": {
+            "columns": "Columns to show, in order",
+            "link_type": "Clicking a row's first cell opens",
+            "link_column": "Using the value of",
+            "rename": "Rename a column header next"
+          }
+        },
+        "rename_column": {
+          "title": "Rename a column",
+          "data": {
+            "column": "Column",
+            "label": "Header (empty = automatic)"
+          }
+        },
+        "actions": {
+          "title": "Row actions",
+          "description": "{summary}",
+          "menu_options": {
+            "add_action": "Add an action",
+            "remove_action": "Remove actions",
+            "menu": "Back"
+          }
+        },
+        "add_action": {
+          "title": "Add a row action",
+          "description": "Each row gets a button that runs a Home Assistant action as the person who presses it. Actions that remove, reset, purge, restart, install firmware or run code are not offered. Actions marked (confirm) always ask before running.",
+          "data": {
+            "label": "Button label",
+            "action": "Action",
+            "target_column": "Target comes from column",
+            "target_kind": "The column holds",
+            "data": "Extra action data (optional)",
+            "confirm": "Ask for confirmation",
+            "confirm_text": "Confirmation text"
+          }
+        },
+        "remove_action": {
+          "title": "Remove actions",
+          "data": {
+            "actions": "Actions to remove"
+          }
+        },
+        "devices": {
+          "title": "Which device pages",
+          "description": "Leave a field empty to not restrict by it. Fields are combined with AND; choices within a field with OR.",
+          "data": {
+            "types": "Device type",
+            "statuses": "Device status",
+            "integrations": "Device integration",
+            "areas": "Device area"
+          }
+        },
+        "preview": {
+          "title": "Preview",
+          "description": "{result}",
+          "data": {
+            "device": "Run for this device",
+            "done": "Back to the menu"
+          }
+        },
+        "save": {
+          "title": "Save the component",
+          "description": "{summary}\n\n{error}"
+        }
+      },
+      "error": {
+        "confirm_required": "Tick the box to confirm.",
+        "invalid_join": "Those columns can't be matched.",
+        "value_required": "Enter a value.",
+        "link_column_required": "Choose the column whose value the link uses.",
+        "action_blocked": "This action is blocked.",
+        "target_not_grouped": "With grouping, the target column must be one of the grouped columns.",
+        "invalid_query": "The component can't be saved yet; fix the problem shown below."
+      },
+      "abort": {
+        "reconfigure_successful": "Component saved."
+      }
+    }
+  },
+  "entity": {
+    "number": {
+      "color_temperature": {
+        "name": "Color temperature"
+      },
+      "color_temperature_of": {
+        "name": "Color temperature ({light})"
+      }
+    },
+    "sensor": {
+      "card_status": {
+        "name": "Device page card"
+      },
+      "bound_to": {
+        "name": "Zigbee bound to"
+      },
+      "bound_from": {
+        "name": "Zigbee bound from"
+      }
+    },
+    "button": {
+      "check_reload": {
+        "name": "Check and reload device page card"
+      },
+      "read_all_bindings": {
+        "name": "Read all Zigbee bindings"
+      },
+      "read_bindings": {
+        "name": "Read Zigbee bindings"
+      }
+    }
+  },
+  "issues": {
+    "attach_failed": {
+      "title": "Device page card could not attach",
+      "description": "A browser on Home Assistant {ha_version} could not add the Custom Device Page Components card to a device page ({reason}). This version was tested with Home Assistant {tested}. Device pages still work; only the extra card is missing.\n\nUpdate Custom Device Page Components when a new release is available, then press **Check and reload device page card** and refresh the browser."
+    }
+  }
+}

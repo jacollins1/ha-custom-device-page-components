@@ -1,0 +1,26 @@
+name: Release
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  zip:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check the tag matches manifest.json
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          ver="$(python3 -c 'import json;print(json.load(open("custom_components/custom_device_page_components/manifest.json"))["version"])')"
+          test "$tag" = "$ver" || { echo "Tag $tag != manifest $ver"; exit 1; }
+      - name: Build zip
+        run: |
+          cd custom_components/custom_device_page_components
+          zip -r ../../custom_device_page_components.zip . -x "__pycache__/*"
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: custom_device_page_components.zip

@@ -1,0 +1,41 @@
+name: Validate
+
+on:
+  push:
+  pull_request:
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+jobs:
+  hassfest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: home-assistant/actions/hassfest@master
+
+  hacs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: hacs/action@main
+        with:
+          category: integration
+
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+      - run: pip install -r requirements_test.txt
+      - run: pytest -q
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: node --check custom_components/custom_device_page_components/www/cdpc.js
+      - run: npm install --no-save jsdom@24 && node tests/js/attach.test.mjs custom_components/custom_device_page_components/www/cdpc.js
+      - name: Module checksum matches
+        run: |
+          cd custom_components/custom_device_page_components/www
+          test "$(sha256sum cdpc.js | cut -d' ' -f1)" = "$(cat cdpc.js.sha256)"
