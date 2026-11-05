@@ -409,3 +409,28 @@ async def test_color_temp_box_follows_light_to_new_device(hass, setup):
     await hass.async_block_till_done()
     boxes = [e for e in er.async_entries_for_config_entry(reg, setup["entry"].entry_id) if e.domain == "number"]
     assert boxes and all(b.device_id == new_dev.id for b in boxes)
+
+
+async def test_related_integration_via_entity_attributes(hass, setup, hass_ws_client):
+    """Scheduler-style link: another integration's entities list this device's entities."""
+    ent = setup["ent"].entity_id
+    sched = MockConfigEntry(domain="scheduler", title="Scheduler")
+    sched.add_to_hass(hass)
+    reg = er.async_get(hass)
+    for uid, name, targets in (
+        ("a", "Scheduler Office - Weekends", [ent]),
+        ("b", "Scheduler Office - Weekdays", [ent, "climate.other"]),
+        ("c", "Scheduler Upstairs", ["climate.other"]),
+    ):
+        e = reg.async_get_or_create("switch", "scheduler", uid, config_entry=sched, suggested_object_id=f"schedule_{uid}")
+        hass.states.async_set(e.entity_id, "on", {"entities": targets, "friendly_name": name})
+    client = await hass_ws_client(hass)
+    await client.send_json_auto_id({"type": f"{DOMAIN}/device", "device_id": setup["dev"].id})
+    related = (await client.receive_json())["result"]["components"][0]["related"]
+    rows = [r for r in related["entries"] if r["title"] == "Scheduler"]
+    assert len(rows) == 1
+    assert rows[0]["subtitle"] == "scheduler · Used by 2: Office - Weekdays, Office - Weekends"
+    assert rows[0]["link"]["url"].endswith(f"#config_entry={sched.entry_id}")
+    # a helper linked through its settings keeps the plain wording
+    helper = [r for r in related["helpers"] + related["entries"] if r["title"] == "Kitchen AL"]
+    assert helper and helper[0]["subtitle"].endswith("Uses this device")

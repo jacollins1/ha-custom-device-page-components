@@ -26,7 +26,9 @@ stops appearing (device pages keep working) and Home Assistant shows a
 
 - **Related helpers, integration entries and dashboards**: a card listing,
   with links, every helper and integration entry whose settings name the
-  device or one of its entities, the device's own integration entry, group
+  device or one of its entities, integrations whose entities list the device's
+  entities as targets (`entities` / `entity_id` attributes, e.g. Scheduler
+  schedules), the device's own integration entry, group
   helpers whose members include its entities, and every dashboard view that
   shows the device or one of its entities.
 - **Color temperature**: boxes under *Configuration* on every light device

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.4 — 2026-11-05
+
+- Related card: an integration also counts as related when one of its entities names this device's entities as targets in its `entities` or `entity_id` attribute, for example Scheduler, whose schedules (`switch.schedule_*`) live in its own storage rather than in its settings. It is listed under Integration entries as "Used by N: <entity names>". Integrations already linked through their settings keep "Uses this device".
+
 ## 0.1.3 — 2026-11-04
 
 Ready for Home Assistant 2026.11, which gives every ZHA group a device of its own:

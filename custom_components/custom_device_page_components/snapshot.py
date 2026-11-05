@@ -31,6 +31,10 @@ _LOGGER = logging.getLogger(__name__)
 
 ENTITY_ID_RE = re.compile(r"\b([a-z0-9_]+\.[a-z0-9_]+)\b")
 DEVICE_ID_RE = re.compile(r"\b([0-9a-f]{32})\b")
+# State attributes that name the entities another entity acts on. Only these
+# are read: other attributes mention entities in passing (last source etc.).
+TARGET_ATTRIBUTES = ("entities", "entity_id")
+MAX_USED_BY_NAMES = 5
 
 
 @dataclass
@@ -223,6 +227,45 @@ class SnapshotManager:
                 name, itype = _integration_info(hass, entry.domain)
                 add(device.id, _entry_rel(entry, name, itype, "Device integration"))
 
+        # 2a. Entities owned by another integration whose state lists this
+        #     device's entities as targets (e.g. Scheduler's switch.schedule_*
+        #     entities: {"entities": ["climate.x"]}). The integration keeps
+        #     these in its own storage, not in its config entry.
+        used_by: dict[tuple[str, str], list[str]] = {}
+        for state in hass.states.async_all():
+            reg = ent_reg.async_get(state.entity_id)
+            if reg is None or not reg.config_entry_id:
+                continue
+            entry = entries.get(reg.config_entry_id)
+            if entry is None or entry.domain == DOMAIN:
+                continue
+            targets: set[str] = set()
+            for key in TARGET_ATTRIBUTES:
+                value = state.attributes.get(key)
+                if isinstance(value, str):
+                    targets.add(value)
+                elif isinstance(value, (list, tuple)):
+                    targets.update(v for v in value if isinstance(v, str))
+            for dev_id in devices_for(targets):
+                if entity_to_device.get(state.entity_id) == dev_id:
+                    continue
+                used_by.setdefault((dev_id, entry.entry_id), []).append(state.name)
+
+        def used_by_text(dev_id: str, entry, integration_name: str) -> str | None:
+            names = used_by.pop((dev_id, entry.entry_id), None)
+            if not names:
+                return None
+            prefix = f"{integration_name} "
+            short = sorted(
+                {n[len(prefix):] if n.lower().startswith(prefix.lower()) else n for n in names},
+                key=str.lower,
+            )
+            shown = ", ".join(short[:MAX_USED_BY_NAMES])
+            more = len(short) - MAX_USED_BY_NAMES
+            if more > 0:
+                shown += f" +{more} more"
+            return f"Used by {len(short)}: {shown}"
+
         # 2. Entries whose stored settings name the device or its entities.
         for entry in entries.values():
             if entry.domain == DOMAIN:
@@ -239,7 +282,22 @@ class SnapshotManager:
             for dev_id in hits:
                 if (dev := dev_reg.async_get(dev_id)) is None or entry.entry_id in device_entry_ids(dev):
                     continue
+                # Linked through its settings already (helpers such as groups,
+                # whose own entity also lists the members): keep the plain text.
+                used_by.pop((dev_id, entry.entry_id), None)
                 add(dev_id, _entry_rel(entry, name, itype, "Uses this device"))
+
+        # 2b. The rest of 2a: integrations linked only through their entities.
+        for dev_id, entry_id in list(used_by):
+            entry = entries[entry_id]
+            dev = dev_reg.async_get(dev_id)
+            if dev is None or entry_id in device_entry_ids(dev):
+                used_by.pop((dev_id, entry_id), None)
+                continue
+            name, itype = _integration_info(hass, entry.domain)
+            how = used_by_text(dev_id, entry, name)
+            if how:
+                add(dev_id, _entry_rel(entry, name, itype, how))
 
         # 3. Group-type entities without a config entry (YAML groups etc.)
         #    whose members are this device's entities.
