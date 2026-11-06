@@ -72,7 +72,8 @@ dashboards, dashboard references, automations (name, Active/Inactive, link to
 the editor), automation and script references (with the part — trigger,
 condition or action — that makes the reference), group members (every group
 entity and its members, with the group's platform, e.g. `group` for group
-helpers), and the Related index.
+helpers; members of group helpers inside a group count too, with their depth
+and the group that lists them directly), and the Related index.
 
 **Recipe — automations that use a group this device is in**: source
 *automation references*; join *group members* on reference entity = group

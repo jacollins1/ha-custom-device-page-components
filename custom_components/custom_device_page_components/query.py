@@ -102,9 +102,13 @@ SCHEMA: dict[str, dict[str, Any]] = {
         "label": "Group members",
         # Every entity whose state lists members in its entity_id attribute:
         # group helpers (platform "group"), YAML groups, and groups made by
-        # other integrations (platform = that integration).
+        # other integrations (platform = that integration). Members of groups
+        # inside a group count too: depth 1 = listed directly, 2 = member of a
+        # group listed in it, and so on; via_group_* is the group that lists
+        # the member directly.
         "columns": ["group_entity_id", "group_name", "group_domain",
-                    "group_platform", "member_entity_id", "member_device_id"],
+                    "group_platform", "member_entity_id", "member_device_id",
+                    "depth", "via_group_entity_id", "via_group_name"],
     },
     "relations": {
         "label": "Related items (built-in index)",

@@ -6,7 +6,7 @@ from typing import Final
 
 DOMAIN: Final = "custom_device_page_components"
 NAME: Final = "Custom Device Page Components"
-VERSION: Final = "0.1.5"
+VERSION: Final = "0.1.6"
 
 # Lowest Home Assistant release this version is written and tested for.
 MIN_HA_VERSION: Final = "2026.2.0"

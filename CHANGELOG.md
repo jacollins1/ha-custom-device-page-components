@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.6 — 2026-11-06
+
+- Group members include nested groups: a device in *Kitchen Lights*, which is inside *All Lights*, is a member of both. New columns `depth` (1 = listed directly) and `via_group_entity_id` / `via_group_name` (the group that lists the member directly). Nesting is followed only through group helpers; loops are cut. An "Automations (Group)" component built from the README recipe therefore also lists automations that use an outer group.
+
 ## 0.1.5 — 2026-11-06
 
 - Builder: new **automations** table (name, state, status *Active* / *Inactive* / *Unavailable*, editor link, mode, last triggered) and **group members** table (group entity, name, domain and platform, member entity and its device).

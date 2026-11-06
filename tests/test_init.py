@@ -490,6 +490,45 @@ async def test_automations_referencing_groups_with_this_device(hass, setup):
     query.validate(GROUP_AUTOMATIONS)
 
 
+async def test_nested_group_members(hass, setup):
+    """A device in a group inside a group is a member of both; loops are cut."""
+    ent = setup["ent"].entity_id
+    reg = er.async_get(hass)
+    inner = reg.async_get_or_create("light", "group", "gi", suggested_object_id="kitchen_lights").entity_id
+    outer = reg.async_get_or_create("light", "group", "go", suggested_object_id="all_lights").entity_id
+    top = reg.async_get_or_create("light", "group", "gt", suggested_object_id="house").entity_id
+    hass.states.async_set(inner, "on", {"entity_id": [ent], "friendly_name": "Kitchen Lights"})
+    sched = reg.async_get_or_create("switch", "scheduler", "s1", suggested_object_id="schedule_x").entity_id
+    hass.states.async_set(sched, "on", {"entity_id": ["light.elsewhere"], "friendly_name": "Schedule"})
+    hass.states.async_set(outer, "on", {"entity_id": [inner, top, sched], "friendly_name": "All Lights"})
+    hass.states.async_set(top, "on", {"entity_id": [outer], "friendly_name": "House"})  # loop
+    assert await async_setup_component(hass, "automation", {"automation": [
+        {"id": "n1", "alias": "Outer trigger", "triggers": [{"trigger": "state", "entity_id": outer}], "actions": []},
+        {"id": "n2", "alias": "Inner and outer", "triggers": [{"trigger": "state", "entity_id": inner}],
+         "conditions": [{"condition": "state", "entity_id": top, "state": "on"}], "actions": []},
+    ]})
+    await hass.async_block_till_done()
+    runtime = setup["entry"].runtime_data
+    res = await runtime.async_run_spec(GROUP_AUTOMATIONS, setup["dev"].id)
+    rows = [dict(zip(res.columns, r)) for r in res.rows]
+    got = {r["t2.name"]: sorted(r["agg:0"].split(",")) for r in rows}
+    assert got == {"Inner and outer": ["House", "Kitchen Lights"], "Outer trigger": ["All Lights"]}
+    # depth and via columns
+    spec = {**GROUP_AUTOMATIONS, "source": {"table": "group_members", "alias": "t0"}, "joins": [],
+            "where": {"match": "all", "conditions": [
+                {"column": "t0.member_entity_id", "op": "eq", "value_source": "fixed", "value": ent}]},
+            "group_by": [], "aggregates": [], "row_link": {"type": "none"},
+            "columns": ["t0.group_name", "t0.depth", "t0.via_group_name"],
+            "order_by": [{"column": "t0.depth", "direction": "asc"}]}
+    res = await runtime.async_run_spec(spec, setup["dev"].id)
+    assert [tuple(r[:3]) for r in res.rows] == [
+        ("Kitchen Lights", 1, "Kitchen Lights"), ("All Lights", 2, "Kitchen Lights"), ("House", 3, "Kitchen Lights")]
+    # a non-helper member (Scheduler) is a member, but its targets are not
+    spec["where"]["conditions"][0]["value"] = "light.elsewhere"
+    res = await runtime.async_run_spec(spec, setup["dev"].id)
+    assert [r[0] for r in res.rows] == ["Schedule"]
+
+
 async def test_confirm_config_changes_option(hass, setup, hass_ws_client):
     """Off by default; the device payload carries it for the frontend."""
     entry = setup["entry"]

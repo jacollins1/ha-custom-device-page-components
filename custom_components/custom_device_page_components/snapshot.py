@@ -471,26 +471,7 @@ class SnapshotManager:
         if "automations" in needed:
             out["automations"] = self._automations()
         if "group_members" in needed:
-            rows = []
-            for state in hass.states.async_all():
-                members = state.attributes.get("entity_id")
-                if isinstance(members, str):
-                    members = [members]
-                if not isinstance(members, (list, tuple)):
-                    continue
-                reg = ent_reg.async_get(state.entity_id)
-                platform = reg.platform if reg else (
-                    "group" if state.domain == "group" else None
-                )
-                for member in members:
-                    if not isinstance(member, str):
-                        continue
-                    mreg = ent_reg.async_get(member)
-                    rows.append(
-                        (state.entity_id, state.name, state.domain, platform,
-                         member, mreg.device_id if mreg else None)
-                    )
-            out["group_members"] = rows
+            out["group_members"] = _group_member_rows(hass, ent_reg)
         if "relations" in needed:
             index = await self.async_relations_index()
             out["relations"] = [
@@ -616,3 +597,59 @@ def _entry_rel(entry, integration_name: str, itype: str, how: str) -> dict:
         "link_type": "config_entry",
         "link_target": f"{entry.domain}:{entry.entry_id}",
     }
+
+
+MAX_GROUP_DEPTH = 10
+
+
+@callback
+def _group_member_rows(hass: HomeAssistant, ent_reg: er.EntityRegistry) -> list[tuple]:
+    """Every (group, member) pair, members of nested groups included.
+
+    A group is any entity whose state lists members in its ``entity_id``
+    attribute. Nesting is followed only through group helpers (platform
+    ``group``): a Scheduler schedule or a ZHA group inside a group is a
+    member, but what *it* lists is not. Each pair appears once, at the
+    shallowest depth it is reached; loops (a group inside itself) are cut.
+    """
+    direct: dict[str, list[str]] = {}
+    names: dict[str, str] = {}
+    meta: dict[str, tuple] = {}
+    for state in hass.states.async_all():
+        members = state.attributes.get("entity_id")
+        if isinstance(members, str):
+            members = [members]
+        if not isinstance(members, (list, tuple)):
+            continue
+        direct[state.entity_id] = [m for m in members if isinstance(m, str)]
+        names[state.entity_id] = state.name
+        reg = ent_reg.async_get(state.entity_id)
+        platform = reg.platform if reg else ("group" if state.domain == "group" else None)
+        meta[state.entity_id] = (state.name, state.domain, platform)
+
+    device_of: dict[str, str | None] = {}
+
+    def device(entity_id: str) -> str | None:
+        if entity_id not in device_of:
+            reg = ent_reg.async_get(entity_id)
+            device_of[entity_id] = reg.device_id if reg else None
+        return device_of[entity_id]
+
+    rows: list[tuple] = []
+    for group, (name, domain, platform) in meta.items():
+        seen = {group}
+        frontier = [(group, m) for m in direct[group]]
+        depth = 1
+        while frontier and depth <= MAX_GROUP_DEPTH:
+            nxt: list[tuple[str, str]] = []
+            for via, member in frontier:
+                if member in seen:
+                    continue
+                seen.add(member)
+                rows.append((group, name, domain, platform, member, device(member),
+                             depth, via, names.get(via)))
+                if member in meta and meta[member][2] == "group":
+                    nxt.extend((member, m) for m in direct[member])
+            frontier = nxt
+            depth += 1
+    return rows
