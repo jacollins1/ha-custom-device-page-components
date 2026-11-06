@@ -88,8 +88,23 @@ SCHEMA: dict[str, dict[str, Any]] = {
     },
     "automation_references": {
         "label": "Automation & script references",
+        # part: trigger / condition (top-level automation conditions) /
+        # action (actions, incl. conditions inside them; all of a script).
         "columns": ["source_entity_id", "source_domain", "device_id",
-                    "entity_id"],
+                    "entity_id", "part"],
+    },
+    "automations": {
+        "label": "Automations",
+        "columns": ["entity_id", "name", "state", "status", "config_id",
+                    "edit_url", "mode", "last_triggered"],
+    },
+    "group_members": {
+        "label": "Group members",
+        # Every entity whose state lists members in its entity_id attribute:
+        # group helpers (platform "group"), YAML groups, and groups made by
+        # other integrations (platform = that integration).
+        "columns": ["group_entity_id", "group_name", "group_domain",
+                    "group_platform", "member_entity_id", "member_device_id"],
     },
     "relations": {
         "label": "Related items (built-in index)",

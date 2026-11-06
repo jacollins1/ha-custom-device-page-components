@@ -1,10 +1,14 @@
 import { JSDOM } from "jsdom";
 import fs from "fs";
-const dom = new JSDOM(`<!DOCTYPE html><body></body>`, { runScripts: "outside-only", url: "http://ha.local/config/devices/device/dev1" });
+const dom = new JSDOM(`<!DOCTYPE html><body></body>`, { runScripts: "outside-only", pretendToBeVisual: true, url: "http://ha.local/config/devices/device/dev1" });
 const w = dom.window;
 const calls = [];
-const hass = { config: { version: "2026.10.4" }, devices: { dev1: {} },
-  callWS: async (m) => { calls.push(m); if (m.type.endsWith("/device")) return { version: "0.1.0", components: [
+const sent = [];
+const connection = { sendMessagePromise: async (m) => { sent.push(m); return { context: { id: "real" } }; } };
+const hass = { config: { version: "2026.10.4" }, devices: { dev1: {} }, connection,
+  entities: { "number.cfg": { device_id: "dev1", entity_category: "config" }, "light.main": { device_id: "dev1", entity_category: null }, "number.other": { device_id: "dev2", entity_category: "config" } },
+  states: { "number.cfg": { entity_id: "number.cfg", state: "40", attributes: { friendly_name: "Switch Minimum level", unit_of_measurement: "%" } } },
+  callWS: async (m) => { calls.push(m); if (m.type.endsWith("/device")) return { version: "0.1.0", confirm_config_changes: true, components: [
     { id: "related", type: "related", title: "Related", order: 0, related: { helpers: [], entries: [{ title: "Kitchen AL", subtitle: "Adaptive Lighting", link: { kind: "url", url: "/config/integrations/integration/adaptive_lighting#config_entry=x" } }], dashboards: [] } },
     { id: "s1", type: "query", title: "Lights", order: 5, style: "table", empty_text: "", labels: ["Entity", "State"], rows: [{ cells: ["light.a", "on"], key: "k1", link: { kind: "more_info", entity_id: "light.a" } }], actions: [{ index: 0, label: "Toggle", confirm: true, confirm_text: "Sure?" }], truncated: false, error: null },
     { id: "s2", type: "query", title: "Nearby", order: 6, style: "list", empty_text: "", labels: ["Name", "Integration", "Model", "Labels"], rows: [{ cells: ["Fan", "tplink", "", "fan", "c5", "c6", "c7", "c8", "c9"], key: "k2", link: { kind: "url", url: "/config/devices/device/d2" } }], actions: [], truncated: false, error: null },
@@ -69,6 +73,39 @@ card.shadowRoot.querySelector('button[data-confirmed="1"]').click();
 await new Promise(r => setTimeout(r, 20));
 const run = calls.find(c => c.type.endsWith("/run_action"));
 if (!run || run.confirmed !== true || run.row_key !== "k1") throw new Error("action not sent");
+// confirm config changes: config entity of the open device waits for "Save config?"
+const root = w.document.createElement("home-assistant"); root.hass = hass; w.document.body.appendChild(root);
+const msg = (id, value) => ({ type: "call_service", domain: "number", service: "set_value", service_data: { value }, target: { entity_id: id } });
+let p = connection.sendMessagePromise(msg("number.cfg", 55));
+await new Promise(r => setTimeout(r, 10));
+let dlg = w.document.querySelector(".cdpc-confirm");
+if (!dlg || !dlg.textContent.includes("Save config?") || !dlg.textContent.includes("40 %") || !dlg.textContent.includes("55 %")) throw new Error("confirm dialog missing or wrong: " + (dlg && dlg.textContent));
+if (sent.length) throw new Error("sent before the answer");
+dlg.querySelector('[data-a="cancel"]').click();
+const res = await p;
+if (sent.length || !res.cancelled) throw new Error("cancel still sent the change");
+if (w.document.querySelector(".cdpc-confirm")) throw new Error("dialog not closed");
+p = connection.sendMessagePromise(msg("number.cfg", 60));
+await new Promise(r => setTimeout(r, 10));
+w.document.querySelector('.cdpc-confirm [data-a="save"]').click();
+await p;
+if (sent.length !== 1 || sent[0].service_data.value !== 60) throw new Error("save did not send");
+// hidden page: animation frames never run, Cancel must still finish and restore hass
+const realRaf = w.requestAnimationFrame; w.requestAnimationFrame = () => 0;
+p = connection.sendMessagePromise(msg("number.cfg", 70));
+await new Promise(r => setTimeout(r, 10));
+w.document.querySelector('.cdpc-confirm [data-a="cancel"]').click();
+const hidden = await Promise.race([p, new Promise(r => setTimeout(() => r("hung"), 1000))]);
+if (hidden === "hung" || !hidden.cancelled) throw new Error("cancel hung on a hidden page");
+const pg = w.document.querySelector("ha-config-device-page");
+if (pg && pg.hass && pg.hass.states["number.cfg"].state !== hass.states["number.cfg"].state) throw new Error("row left on the placeholder value");
+w.requestAnimationFrame = realRaf;
+if (sent.length !== 1) throw new Error("hidden-page cancel sent the change");
+// not intercepted: non-config entity, other device's config entity, other message types
+await connection.sendMessagePromise({ type: "call_service", domain: "light", service: "turn_on", target: { entity_id: "light.main" } });
+await connection.sendMessagePromise(msg("number.other", 1));
+await connection.sendMessagePromise({ type: "get_states" });
+if (sent.length !== 4 || w.document.querySelector(".cdpc-confirm")) throw new Error("intercepted something it should not");
 // unknown layout -> failure report
 const p2 = w.document.createElement("ha-config-device-page");
 p2.hass = hass; p2.deviceId = "dev1"; w.document.body.appendChild(p2);

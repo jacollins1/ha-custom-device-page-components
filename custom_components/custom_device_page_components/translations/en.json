@@ -11,13 +11,15 @@
           "color_temp_kelvin_enabled": "Color temperature box on light devices (kelvin)",
           "color_temp_mireds_enabled": "Color temperature box on light devices (mireds)",
           "color_temp_models": "Only these models (empty = every color-temperature light)",
-          "bindings_enabled": "Zigbee bindings (ZHA): Bound to / Bound from / Read bindings"
+          "bindings_enabled": "Zigbee bindings (ZHA): Bound to / Bound from / Read bindings",
+          "confirm_config_changes": "Confirm config changes"
         },
         "data_description": {
           "related_order": "Cards are sorted by this number; custom components default to 10.",
           "color_temp_models": "Pick models, or type a model or model ID.",
           "bindings_enabled": "Reads binding tables only when you press a button. Uses ZHA internals, so a ZHA update can break this part on its own.",
-          "color_temp_mireds_enabled": "With both on, each light shows both boxes; they always show the same temperature."
+          "color_temp_mireds_enabled": "With both on, each light shows both boxes; they always show the same temperature.",
+          "confirm_config_changes": "Ask \"Save config?\" before a change made in a device page's Configuration section is sent to the device. Cancel puts the control back to its current value."
         }
       }
     },
@@ -37,13 +39,15 @@
           "color_temp_kelvin_enabled": "Color temperature box on light devices (kelvin)",
           "color_temp_mireds_enabled": "Color temperature box on light devices (mireds)",
           "color_temp_models": "Only these models (empty = every color-temperature light)",
-          "bindings_enabled": "Zigbee bindings (ZHA): Bound to / Bound from / Read bindings"
+          "bindings_enabled": "Zigbee bindings (ZHA): Bound to / Bound from / Read bindings",
+          "confirm_config_changes": "Confirm config changes"
         },
         "data_description": {
           "related_order": "Cards are sorted by this number; custom components default to 10.",
           "color_temp_models": "Pick models, or type a model or model ID.",
           "bindings_enabled": "Reads binding tables only when you press a button. Uses ZHA internals, so a ZHA update can break this part on its own.",
-          "color_temp_mireds_enabled": "With both on, each light shows both boxes; they always show the same temperature."
+          "color_temp_mireds_enabled": "With both on, each light shows both boxes; they always show the same temperature.",
+          "confirm_config_changes": "Ask \"Save config?\" before a change made in a device page's Configuration section is sent to the device. Cancel puts the control back to its current value."
         }
       },
       "confirm_remove": {

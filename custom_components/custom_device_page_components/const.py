@@ -6,7 +6,7 @@ from typing import Final
 
 DOMAIN: Final = "custom_device_page_components"
 NAME: Final = "Custom Device Page Components"
-VERSION: Final = "0.1.4"
+VERSION: Final = "0.1.5"
 
 # Lowest Home Assistant release this version is written and tested for.
 MIN_HA_VERSION: Final = "2026.2.0"
@@ -27,6 +27,7 @@ CONF_COLOR_TEMP: Final = "color_temp_enabled"
 CONF_COLOR_TEMP_UNIT: Final = "color_temp_unit"
 CONF_COLOR_TEMP_MODELS: Final = "color_temp_models"
 CONF_BINDINGS: Final = "bindings_enabled"
+CONF_CONFIRM_CONFIG: Final = "confirm_config_changes"
 
 UNIT_KELVIN: Final = "kelvin"
 UNIT_MIREDS: Final = "mireds"
@@ -39,6 +40,7 @@ DEFAULT_OPTIONS: Final = {
     CONF_COLOR_TEMP_MIREDS: True,
     CONF_COLOR_TEMP_MODELS: [],
     CONF_BINDINGS: True,
+    CONF_CONFIRM_CONFIG: False,
 }
 
 STATIC_URL: Final = f"/{DOMAIN}_static"

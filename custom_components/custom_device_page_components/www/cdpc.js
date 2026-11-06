@@ -7,7 +7,7 @@
  * placed in that column), and tells the integration whether that worked. If a frontend update changes the device page, the card does
  * not appear and Home Assistant shows a Repair issue instead.
  */
-const CDPC_VERSION = "0.1.4";
+const CDPC_VERSION = "0.1.5";
 // Displayed columns per component; the server enforces the same cap.
 const MAX_COLUMNS = 8;
 const DOMAIN = "custom_device_page_components";
@@ -76,6 +76,7 @@ function attach(page) {
   // The page went from 3 columns to 1 (or back): drop hosts of gone columns.
   for (const h of hosts) if (h.column >= columns.length) h.remove();
   store.setDevice(page.deviceId);
+  installConfirm(hass.connection);
   report(hass, true);
 }
 
@@ -113,6 +114,7 @@ class CdpcStore {
       const data = await this.hass.callWS({ type: `${DOMAIN}/device`, device_id: id });
       if (id !== this.deviceId) return;
       this.data = data;
+      confirmState.enabled = !!data.confirm_config_changes;
       this.error = null;
     } catch (err) {
       this.error = (err && err.message) || String(err);
@@ -132,6 +134,162 @@ class CdpcStore {
 function columnIndex(comp, count) {
   const wanted = [1, 2, 3].includes(comp.column) ? comp.column : 1;
   return Math.min(wanted, count) - 1;
+}
+
+
+// ---------------------------------------------------------------------------
+// "Confirm config changes" (integration option, off by default).
+// A change to an entity in the Configuration section of the device page that
+// is open (entity_category "config", same device) is held until the user
+// answers "Save config?". The hook sits on the websocket connection, so every
+// row type (slider, box, select, toggle, button) is covered. Any error in
+// here lets the change through unchanged: the option must never block HA.
+// ---------------------------------------------------------------------------
+const confirmState = { enabled: false, queue: Promise.resolve() };
+const DEVICE_PATH = /^\/config\/devices\/device\/([^/?#]+)/;
+
+function rootHass() {
+  const ha = document.querySelector("home-assistant");
+  return ha && ha.hass;
+}
+
+function configTarget(msg) {
+  if (!confirmState.enabled || !msg || msg.type !== "call_service") return null;
+  const m = DEVICE_PATH.exec(location.pathname);
+  const hass = rootHass();
+  if (!m || !hass || !hass.entities) return null;
+  let ids = (msg.target && msg.target.entity_id) || (msg.service_data && msg.service_data.entity_id);
+  if (!ids) return null;
+  ids = Array.isArray(ids) ? ids : [ids];
+  const hit = ids.find((id) => {
+    const e = hass.entities[id];
+    return e && e.device_id === m[1] && e.entity_category === "config";
+  });
+  return hit ? { entityId: hit, hass } : null;
+}
+
+function describe(hit, msg) {
+  const st = hit.hass.states[hit.entityId];
+  const unit = (st && st.attributes.unit_of_measurement) || "";
+  const fmt = (v) => (v === undefined || v === null ? "?" : `${v}${unit && /^-?[\d.]+$/.test(String(v)) ? " " + unit : ""}`);
+  const data = msg.service_data || {};
+  let next;
+  if ("value" in data) next = fmt(data.value);
+  else if ("option" in data) next = data.option;
+  else if (msg.service === "turn_on") next = "on";
+  else if (msg.service === "turn_off") next = "off";
+  else if (msg.service === "toggle") next = st && st.state === "on" ? "off" : "on";
+  else next = msg.service.replace(/_/g, " ");
+  const name = (st && st.attributes.friendly_name) || hit.entityId;
+  return { name, from: st ? fmt(st.state) : "?", to: next };
+}
+
+function askSave(info) {
+  return new Promise((resolve) => {
+    const wrap = document.createElement("div");
+    wrap.className = "cdpc-confirm";
+    wrap.setAttribute("role", "dialog");
+    wrap.setAttribute("aria-modal", "true");
+    wrap.style.cssText =
+      "position:fixed;inset:0;z-index:100000;display:flex;align-items:center;justify-content:center;" +
+      "background:rgba(0,0,0,.45);font-family:var(--ha-font-family-body, Roboto, sans-serif)";
+    wrap.innerHTML = `<div style="background:var(--card-background-color,#fff);color:var(--primary-text-color,#212121);
+      border-radius:16px;padding:20px 24px;max-width:360px;width:calc(100% - 48px);box-shadow:0 8px 24px rgba(0,0,0,.3)">
+      <div style="font-size:20px;margin-bottom:12px">Save config?</div>
+      <div style="font-size:14px;margin-bottom:4px">${esc(info.name)}</div>
+      <div style="font-size:14px;color:var(--secondary-text-color,#727272);margin-bottom:20px">${esc(info.from)} → ${esc(info.to)}</div>
+      <div style="display:flex;justify-content:flex-end;gap:8px">
+        <button data-a="cancel" style="font:inherit;font-size:14px;padding:8px 16px;border-radius:18px;border:1px solid var(--primary-color,#03a9f4);background:none;color:var(--primary-color,#03a9f4);cursor:pointer">Cancel</button>
+        <button data-a="save" style="font:inherit;font-size:14px;padding:8px 16px;border-radius:18px;border:none;background:var(--primary-color,#03a9f4);color:var(--text-primary-color,#fff);cursor:pointer">Save</button>
+      </div></div>`;
+    const done = (save) => {
+      document.removeEventListener("keydown", onKey, true);
+      wrap.remove();
+      resolve(save);
+    };
+    const onKey = (ev) => {
+      if (ev.key === "Escape") { ev.stopPropagation(); done(false); }
+    };
+    wrap.addEventListener("click", (ev) => {
+      const a = ev.target && ev.target.getAttribute && ev.target.getAttribute("data-a");
+      if (a) done(a === "save");
+      else if (ev.target === wrap) done(false); // tap outside = Cancel
+    });
+    document.addEventListener("keydown", onKey, true);
+    document.body.appendChild(wrap);
+    const save = wrap.querySelector('[data-a="save"]');
+    if (save) save.focus();
+  });
+}
+
+// Put the control back to the entity's current value: rows only redraw a
+// control when the value they render changes, so render a different value
+// once, then the real one.
+async function revertRows(entityId) {
+  const hass = rootHass();
+  const page = findPage(document);
+  if (!hass || !page || !hass.states[entityId]) return;
+  const real = hass.states[entityId];
+  const flip = real.state === "on" ? "off" : real.state === "off" ? "on" : "unavailable";
+  page.hass = { ...hass, states: { ...hass.states, [entityId]: { ...real, state: flip } } };
+  try {
+    await page.updateComplete;
+    // A hidden page (backgrounded app or tab) never runs animation frames,
+    // so don't wait on one for longer than a moment.
+    await new Promise((r) => {
+      const t = setTimeout(r, 100);
+      requestAnimationFrame(() => {
+        clearTimeout(t);
+        r();
+      });
+    });
+  } finally {
+    page.hass = rootHass() || hass;
+  }
+}
+
+function findPage(root) {
+  const direct = root.querySelector(PAGE_TAG);
+  if (direct) return direct;
+  for (const el of root.querySelectorAll("*")) {
+    if (el.shadowRoot) {
+      const found = findPage(el.shadowRoot);
+      if (found) return found;
+    }
+  }
+  return null;
+}
+
+function installConfirm(conn) {
+  if (!conn || conn.__cdpcConfirm || typeof conn.sendMessagePromise !== "function") return;
+  const send = conn.sendMessagePromise.bind(conn);
+  conn.sendMessagePromise = function (msg) {
+    let hit = null;
+    try {
+      hit = configTarget(msg);
+    } catch (err) {
+      hit = null;
+    }
+    if (!hit) return send(msg);
+    const run = confirmState.queue.then(async () => {
+      let save = true;
+      try {
+        save = await askSave(describe(hit, msg));
+      } catch (err) {
+        save = true;
+      }
+      if (save) return send(msg);
+      try {
+        await revertRows(hit.entityId);
+      } catch (err) {
+        /* the next state update redraws the row anyway */
+      }
+      return { context: null, cancelled: true };
+    });
+    confirmState.queue = run.catch(() => {});
+    return run;
+  };
+  conn.__cdpcConfirm = true;
 }
 
 async function install() {

@@ -434,3 +434,76 @@ async def test_related_integration_via_entity_attributes(hass, setup, hass_ws_cl
     # a helper linked through its settings keeps the plain wording
     helper = [r for r in related["helpers"] + related["entries"] if r["title"] == "Kitchen AL"]
     assert helper and helper[0]["subtitle"].endswith("Uses this device")
+
+
+GROUP_AUTOMATIONS = {
+    "name": "Automations (Group)", "title": "Automations (Group)", "style": "list", "column": 1,
+    "order": 20, "enabled": True, "empty_text": "No automations trigger on or check a group with this device",
+    "source": {"table": "automation_references", "alias": "t0"},
+    "joins": [
+        {"type": "inner", "table": "group_members", "alias": "t1", "left": "t0.entity_id", "right": "t1.group_entity_id"},
+        {"type": "inner", "table": "automations", "alias": "t2", "left": "t0.source_entity_id", "right": "t2.entity_id"},
+    ],
+    "where": {"match": "all", "conditions": [
+        {"column": "t1.member_device_id", "op": "eq", "value_source": "device.id", "value": ""},
+        {"column": "t0.part", "op": "in", "value_source": "fixed", "value": "trigger,condition"},
+        {"column": "t1.group_platform", "op": "eq", "value_source": "fixed", "value": "group"},
+    ]},
+    "group_by": ["t2.name", "t2.status", "t2.edit_url"],
+    "aggregates": [{"func": "list", "column": "t1.group_name", "label": "Group"}],
+    "order_by": [{"column": "t2.name", "direction": "asc"}],
+    "limit": 100, "columns": ["t2.name", "agg:0", "t2.status"], "labels": {},
+    "row_link": {"type": "url", "column": "t2.edit_url"}, "actions": [],
+    "device_filter": {"types": [], "statuses": [], "integrations": [], "areas": []},
+}
+
+
+async def test_automations_referencing_groups_with_this_device(hass, setup):
+    """The 'Automations (Group)' component built only from builder tables."""
+    ent = setup["ent"].entity_id
+    reg = er.async_get(hass)
+    grp = reg.async_get_or_create("light", "group", "g1", suggested_object_id="kitchen_lights")
+    hass.states.async_set(grp.entity_id, "on", {"entity_id": [ent], "friendly_name": "Kitchen Lights"})
+    other = reg.async_get_or_create("light", "linus_dashboard", "g2", suggested_object_id="linus_all")
+    hass.states.async_set(other.entity_id, "on", {"entity_id": [ent], "friendly_name": "Linus All"})
+    g = grp.entity_id
+    assert await async_setup_component(hass, "automation", {"automation": [
+        {"id": "a1", "alias": "Trigger on group", "triggers": [{"trigger": "state", "entity_id": g}], "actions": []},
+        {"id": "a2", "alias": "Condition on group", "initial_state": False,
+         "triggers": [{"trigger": "event", "event_type": "x"}],
+         "conditions": [{"condition": "state", "entity_id": g, "state": "on"}], "actions": []},
+        {"id": "a3", "alias": "Action only", "triggers": [{"trigger": "event", "event_type": "y"}],
+         "actions": [{"action": "light.turn_on", "target": {"entity_id": g}}]},
+        {"id": "a4", "alias": "Non-helper group", "triggers": [{"trigger": "state", "entity_id": other.entity_id}], "actions": []},
+    ]})
+    await hass.async_block_till_done()
+    runtime = setup["entry"].runtime_data
+    res = await runtime.async_run_spec(GROUP_AUTOMATIONS, setup["dev"].id)
+    rows = [dict(zip(res.columns, r)) for r in res.rows]
+    assert [(r["t2.name"], r["agg:0"], r["t2.status"]) for r in rows] == [
+        ("Condition on group", "Kitchen Lights", "Inactive"),
+        ("Trigger on group", "Kitchen Lights", "Active"),
+    ]
+    assert rows[1]["t2.edit_url"] == "/config/automation/edit/a1"
+    # and the spec is accepted by the engine's validator
+    from custom_components.custom_device_page_components import query
+    query.validate(GROUP_AUTOMATIONS)
+
+
+async def test_confirm_config_changes_option(hass, setup, hass_ws_client):
+    """Off by default; the device payload carries it for the frontend."""
+    entry = setup["entry"]
+    r = await hass.config_entries.options.async_init(entry.entry_id)
+    defaults = {f["name"]: f.get("default") for f in r["data_schema"].schema and [
+        {"name": str(k), "default": k.default() if callable(getattr(k, "default", None)) else None}
+        for k in r["data_schema"].schema]}
+    assert defaults["confirm_config_changes"] is False
+    client = await hass_ws_client(hass)
+    await client.send_json_auto_id({"type": f"{DOMAIN}/device", "device_id": setup["dev"].id})
+    assert (await client.receive_json())["result"]["confirm_config_changes"] is False
+    with patch("custom_components.custom_device_page_components.add_extra_js_url"):
+        r = await hass.config_entries.options.async_configure(r["flow_id"], {**NEW_OPTS, "confirm_config_changes": True})
+        await hass.async_block_till_done()
+    assert r["type"] == "create_entry"
+    await client.send_json_auto_id({"type": f"{DOMAIN}/device", "device_id": setup["dev"].id})
+    assert (await client.receive_json())["result"]["confirm_config_changes"] is True

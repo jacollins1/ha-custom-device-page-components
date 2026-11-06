@@ -41,6 +41,12 @@ stops appearing (device pages keep working) and Home Assistant shows a
   bindings* on the integration's own device. Reads only happen when you press
   a button; nothing is bound or unbound.
 
+**Confirm config changes** (option, off by default): when on, changing any
+control in a device page's *Configuration* section first asks **Save
+config?** with the old and new value. *Cancel* (or Escape, or tapping outside)
+sends nothing and puts the control back. Useful on phones, where scrolling
+past a slider can move it.
+
 **Placement**: each component, and the Related card, goes at the bottom of
 device page column 1 (left), 2 (middle) or 3 (right). On narrow screens Home
 Assistant shows a single column; cards then stack in column order.
@@ -62,8 +68,19 @@ builder:
 
 Tables: devices, device ↔ integration entries, entities, current states,
 areas, floors, labels, device/entity ↔ labels, integration entries,
-dashboards, dashboard references, automation and script references, and the
-Related index.
+dashboards, dashboard references, automations (name, Active/Inactive, link to
+the editor), automation and script references (with the part — trigger,
+condition or action — that makes the reference), group members (every group
+entity and its members, with the group's platform, e.g. `group` for group
+helpers), and the Related index.
+
+**Recipe — automations that use a group this device is in**: source
+*automation references*; join *group members* on reference entity = group
+entity, and *automations* on source entity = automation entity. Conditions:
+member device = *this device*, part in `trigger,condition`, group platform =
+`group`. Group by automation name, status and edit link with a *list* of group
+names. Columns: name, group names, status; row link: page, edit link; style
+*List*.
 
 ## Example
 

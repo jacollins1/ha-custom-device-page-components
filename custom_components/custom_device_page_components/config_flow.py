@@ -38,6 +38,7 @@ from .actions import action_level, available_actions
 from .const import (
     COLUMNS,
     CONF_BINDINGS,
+    CONF_CONFIRM_CONFIG,
     CONF_COLOR_TEMP_KELVIN,
     CONF_COLOR_TEMP_MIREDS,
     CONF_COLOR_TEMP_MODELS,
@@ -95,6 +96,9 @@ def _builtin_schema(hass, defaults: dict[str, Any]) -> vol.Schema:
                 CONF_COLOR_TEMP_MODELS, default=defaults[CONF_COLOR_TEMP_MODELS]
             ): _select(models, multiple=True, custom=True),
             vol.Required(CONF_BINDINGS, default=defaults[CONF_BINDINGS]): BooleanSelector(),
+            vol.Required(
+                CONF_CONFIRM_CONFIG, default=defaults[CONF_CONFIRM_CONFIG]
+            ): BooleanSelector(),
         }
     )
 

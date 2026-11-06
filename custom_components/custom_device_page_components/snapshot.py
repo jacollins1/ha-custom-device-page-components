@@ -468,6 +468,29 @@ class SnapshotManager:
             out["dashboard_references"] = refs
         if "automation_references" in needed:
             out["automation_references"] = self._automation_refs()
+        if "automations" in needed:
+            out["automations"] = self._automations()
+        if "group_members" in needed:
+            rows = []
+            for state in hass.states.async_all():
+                members = state.attributes.get("entity_id")
+                if isinstance(members, str):
+                    members = [members]
+                if not isinstance(members, (list, tuple)):
+                    continue
+                reg = ent_reg.async_get(state.entity_id)
+                platform = reg.platform if reg else (
+                    "group" if state.domain == "group" else None
+                )
+                for member in members:
+                    if not isinstance(member, str):
+                        continue
+                    mreg = ent_reg.async_get(member)
+                    rows.append(
+                        (state.entity_id, state.name, state.domain, platform,
+                         member, mreg.device_id if mreg else None)
+                    )
+            out["group_members"] = rows
         if "relations" in needed:
             index = await self.async_relations_index()
             out["relations"] = [
@@ -480,32 +503,108 @@ class SnapshotManager:
 
     @callback
     def _automation_refs(self) -> list[tuple]:
+        """(source, domain, device_id, entity_id, part) for automations and scripts.
+
+        Automations are split into trigger / condition / action parts with
+        Home Assistant's own extractors on the validated config (blueprints
+        included). Scripts are all "action".
+        """
         rows: list[tuple] = []
         ent_reg = er.async_get(self.hass)
-        for source_domain in ("automation", "script"):
-            try:
-                if source_domain == "automation":
-                    from homeassistant.components.automation import (  # noqa: PLC0415
-                        devices_in_automation as devs,
-                        entities_in_automation as ents,
-                    )
-                else:
-                    from homeassistant.components.script import (  # noqa: PLC0415
-                        devices_in_script as devs,
-                        entities_in_script as ents,
-                    )
-            except ImportError:
+
+        def emit(source: str, domain: str, part: str, ents, devs) -> None:
+            for dev_id in devs:
+                rows.append((source, domain, dev_id, None, part))
+            for ent_id in ents:
+                reg = ent_reg.async_get(ent_id)
+                rows.append(
+                    (source, domain, reg.device_id if reg else None, ent_id, part)
+                )
+
+        for entity in self._component_entities("automation"):
+            parts = _automation_parts(entity)
+            if parts is None:  # internals changed: fall back to "any part"
+                emit(entity.entity_id, "automation", "any",
+                     getattr(entity, "referenced_entities", set()),
+                     getattr(entity, "referenced_devices", set()))
                 continue
-            for state in self.hass.states.async_all(source_domain):
-                for dev_id in devs(self.hass, state.entity_id):
-                    rows.append((state.entity_id, source_domain, dev_id, None))
-                for ent_id in ents(self.hass, state.entity_id):
-                    reg = ent_reg.async_get(ent_id)
-                    rows.append(
-                        (state.entity_id, source_domain,
-                         reg.device_id if reg else None, ent_id)
-                    )
+            for part, (ents, devs) in parts.items():
+                emit(entity.entity_id, "automation", part, ents, devs)
+        for entity in self._component_entities("script"):
+            emit(entity.entity_id, "script", "action",
+                 getattr(entity, "referenced_entities", set()),
+                 getattr(entity, "referenced_devices", set()))
         return rows
+
+    @callback
+    def _component_entities(self, domain: str) -> list:
+        """Entity objects of the automation or script component."""
+        try:
+            if domain == "automation":
+                from homeassistant.components.automation import (  # noqa: PLC0415
+                    DATA_COMPONENT,
+                )
+            else:
+                from homeassistant.components.script import (  # noqa: PLC0415
+                    DATA_COMPONENT,
+                )
+        except ImportError:
+            return []
+        component = self.hass.data.get(DATA_COMPONENT)
+        return list(component.entities) if component is not None else []
+
+    @callback
+    def _automations(self) -> list[tuple]:
+        rows: list[tuple] = []
+        for entity in self._component_entities("automation"):
+            state = self.hass.states.get(entity.entity_id)
+            attrs = state.attributes if state else {}
+            config_id = attrs.get("id")
+            rows.append(
+                (
+                    entity.entity_id,
+                    state.name if state else entity.entity_id,
+                    state.state if state else None,
+                    {"on": "Active", "off": "Inactive"}.get(
+                        state.state if state else "", "Unavailable"
+                    ),
+                    config_id,
+                    f"/config/automation/edit/{config_id}" if config_id else None,
+                    attrs.get("mode"),
+                    str(attrs["last_triggered"]) if attrs.get("last_triggered") else None,
+                )
+            )
+        return rows
+
+
+def _automation_parts(entity) -> dict[str, tuple[set[str], set[str]]] | None:
+    """Entities and devices referenced by each part of one automation."""
+    try:
+        from homeassistant.helpers import (  # noqa: PLC0415
+            condition as condition_helper,
+            trigger as trigger_helper,
+        )
+
+        triggers = getattr(entity, "_trigger_config")
+        cond = getattr(entity, "_condition")
+        t_ents: set[str] = set()
+        t_devs: set[str] = set()
+        for conf in triggers:
+            t_ents |= set(trigger_helper.async_extract_entities(conf))
+            t_devs |= set(trigger_helper.async_extract_devices(conf))
+        c_ents: set[str] = set()
+        c_devs: set[str] = set()
+        for conf in (cond.config if cond is not None else []):
+            c_ents |= set(condition_helper.async_extract_entities(conf))
+            c_devs |= set(condition_helper.async_extract_devices(conf))
+        script = entity.action_script
+        return {
+            "trigger": (t_ents, t_devs),
+            "condition": (c_ents, c_devs),
+            "action": (set(script.referenced_entities), set(script.referenced_devices)),
+        }
+    except Exception:  # noqa: BLE001 - private internals; caller falls back
+        return None
 
 
 def _entry_rel(entry, integration_name: str, itype: str, how: str) -> dict:

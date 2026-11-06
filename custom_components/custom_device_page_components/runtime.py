@@ -17,6 +17,7 @@ from . import query
 from .actions import ActionRefused, action_level, async_run_action
 from .const import (
     COLUMNS,
+    CONF_CONFIRM_CONFIG,
     CONF_RELATED,
     CONF_RELATED_COLUMN,
     CONF_RELATED_ORDER,
@@ -126,7 +127,11 @@ class Runtime:
         device = dr.async_get(self.hass).async_get(device_id)
         comps: list[dict[str, Any]] = []
         if device is None:
-            return {"version": VERSION, "components": comps}
+            return {
+            "version": VERSION,
+            "components": comps,
+            "confirm_config_changes": bool(self.entry.options.get(CONF_CONFIRM_CONFIG, False)),
+        }
         opts = self.entry.options
         if opts.get(CONF_RELATED, True):
             related = await self.snapshot.async_related(device_id)
@@ -151,7 +156,11 @@ class Runtime:
                 continue
             comps.append(await self._component_payload(sub_id, spec, device_id))
         comps.sort(key=lambda c: (c["order"], c["title"].lower()))
-        return {"version": VERSION, "components": comps}
+        return {
+            "version": VERSION,
+            "components": comps,
+            "confirm_config_changes": bool(self.entry.options.get(CONF_CONFIRM_CONFIG, False)),
+        }
 
     async def _component_payload(
         self, sub_id: str, spec: dict[str, Any], device_id: str

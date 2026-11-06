@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.5 — 2026-11-06
+
+- Builder: new **automations** table (name, state, status *Active* / *Inactive* / *Unavailable*, editor link, mode, last triggered) and **group members** table (group entity, name, domain and platform, member entity and its device).
+- Builder: *automation and script references* gain a **part** column — `trigger`, `condition` or `action` — so a component can list only automations that trigger or test on something. Script references are `action`.
+- With these, a component such as "Automations (Group)" — automations whose triggers or conditions use a group helper this device is a member of — can be built without code (recipe in the README).
+- New option **Confirm config changes** (off by default): a change to a control in a device page's *Configuration* section asks "Save config?" first. Cancel sends nothing and resets the control, also when the app is in the background.
+
 ## 0.1.4 — 2026-11-05
 
 - Related card: an integration also counts as related when one of its entities names this device's entities as targets in its `entities` or `entity_id` attribute, for example Scheduler, whose schedules (`switch.schedule_*`) live in its own storage rather than in its settings. It is listed under Integration entries as "Used by N: <entity names>". Integrations already linked through their settings keep "Uses this device".
