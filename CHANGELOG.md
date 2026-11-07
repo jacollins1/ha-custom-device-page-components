@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.8 — 2026-11-07
+
+- Column formats: **Show as feet and inches** for lengths (e.g. 600 cm → `19′ 8″`, −75 cm → `-2′ 6″`). Decimals apply to the inches.
+
 ## 0.1.7 — 2026-11-06
 
 - Builder: **Your list** — a small `key = label` table typed into the component (columns key, label, position). Join it for friendly labels, and sort by position for your own row order.

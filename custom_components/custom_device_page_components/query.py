@@ -510,6 +510,27 @@ def unit_converter(fmt: dict[str, Any]):
             raise QueryError(f"Decimals must be between 0 and {MAX_DECIMALS}")
     else:
         decimals = None
+    feet_inches = bool(fmt.get("feet_inches"))
+    if feet_inches:
+        from homeassistant.util.unit_conversion import DistanceConverter
+
+        if not src or src not in DistanceConverter.VALID_UNITS:
+            raise QueryError("Feet and inches needs a length unit to convert from")
+        to_inches = DistanceConverter.converter_factory(src, "in")
+
+        def apply_ft_in(value: Any) -> Any:
+            if value is None or not _is_number(value):
+                return value
+            inches = round(abs(to_inches(float(value))), decimals or 0)
+            feet, rest = divmod(inches, 12)
+            rest = round(rest, decimals or 0)
+            if rest >= 12:
+                feet, rest = feet + 1, 0
+            sign = "-" if float(value) < 0 and (feet or rest) else ""
+            rest_text = f"{rest:.{decimals or 0}f}"
+            return f"{sign}{int(feet)}′ {rest_text}″"
+
+        return apply_ft_in
     convert = None
     if src or dst:
         if not (src and dst):

@@ -987,6 +987,8 @@ class ComponentFlow(ConfigSubentryFlow):
                 "convert_to": user_input.get("convert_to") or "",
                 "decimals": "" if user_input.get("decimals") in (None, "") else int(user_input["decimals"]),
             }
+            if user_input.get("feet_inches"):
+                fmt["feet_inches"] = True
             try:
                 query.unit_converter(fmt)
             except query.QueryError:
@@ -1012,6 +1014,7 @@ class ComponentFlow(ConfigSubentryFlow):
                     vol.Optional("decimals"): NumberSelector(
                         NumberSelectorConfig(min=0, max=query.MAX_DECIMALS, mode=NumberSelectorMode.BOX)
                     ),
+                    vol.Optional("feet_inches", default=bool(cur.get("feet_inches"))): BooleanSelector(),
                     vol.Optional("remove", default=False): BooleanSelector(),
                 }
             ),
@@ -1020,6 +1023,7 @@ class ComponentFlow(ConfigSubentryFlow):
                 "current": "\n".join(
                     f"- {query.column_label(self.spec, k)}: "
                     + (f"{v['convert_from']} → {v['convert_to']}" if v.get("convert_from") else "no conversion")
+                    + (", feet and inches" if v.get("feet_inches") else "")
                     + (f", {v['decimals']} decimals" if v.get("decimals") not in (None, "") else "")
                     for k, v in formats.items()
                 ) or "None yet."

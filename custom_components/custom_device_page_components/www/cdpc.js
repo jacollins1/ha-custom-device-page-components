@@ -7,7 +7,7 @@
  * placed in that column), and tells the integration whether that worked. If a frontend update changes the device page, the card does
  * not appear and Home Assistant shows a Repair issue instead.
  */
-const CDPC_VERSION = "0.1.7";
+const CDPC_VERSION = "0.1.8";
 // Displayed columns per component; the server enforces the same cap.
 const MAX_COLUMNS = 8;
 const DOMAIN = "custom_device_page_components";

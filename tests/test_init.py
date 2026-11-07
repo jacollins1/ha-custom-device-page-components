@@ -569,8 +569,8 @@ DETECTION_AREA = {
         {"column": "t0.device_id", "op": "eq", "value_source": "device.id", "value": ""}]},
     "group_by": [], "aggregates": [],
     "order_by": [{"column": "t1.position", "direction": "asc"}],
-    "limit": 100, "columns": ["t1.label", "t2.state"], "labels": {"t1.label": "Setting", "t2.state": "Feet"},
-    "formats": {"t2.state": {"convert_from": "cm", "convert_to": "ft", "decimals": 1}},
+    "limit": 100, "columns": ["t1.label", "t2.state"], "labels": {"t1.label": "Setting", "t2.state": "Distance"},
+    "formats": {"t2.state": {"convert_from": "cm", "convert_to": "ft", "decimals": 0, "feet_inches": True}},
     "row_link": {"type": "none"}, "actions": [],
     "device_filter": {"types": ["model:Inovelli|VZM32-SN", "model:Inovelli|VZW32-SN"],
                       "statuses": [], "integrations": [], "areas": []},
@@ -606,10 +606,10 @@ async def test_inovelli_detection_area_in_feet(hass, setup):
     runtime = setup["entry"].runtime_data
     labels = [v for _, v in MMWAVE_KEYS]
     res = await runtime.async_run_spec(DETECTION_AREA, vzm.id)
-    assert res.labels == ["Setting", "Feet"]
-    assert [tuple(r) for r in res.rows] == list(zip(labels, ["0.0", "10.9", "-2.5", "2.5", "-1.8", "18.8"]))
+    assert res.labels == ["Setting", "Distance"]
+    assert [tuple(r) for r in res.rows] == list(zip(labels, ["0′ 0″", "10′ 11″", "-2′ 6″", "2′ 6″", "-1′ 10″", "18′ 9″"]))
     res = await runtime.async_run_spec(DETECTION_AREA, vzw.id)
-    assert [tuple(r) for r in res.rows] == list(zip(labels, ["0.0", "19.7", "-3.3", "3.3", "-10.1", "9.1"]))
+    assert [tuple(r) for r in res.rows] == list(zip(labels, ["0′ 0″", "19′ 8″", "-3′ 3″", "3′ 3″", "-10′ 1″", "9′ 1″"]))
     # only Inovelli VZM32-SN / VZW32-SN device pages
     flt = DETECTION_AREA["device_filter"]
     assert filters.device_matches(hass, vzm, flt, True) and filters.device_matches(hass, vzw, flt, True)
@@ -628,6 +628,12 @@ async def test_formats_and_value_list_validation():
     assert query.unit_converter({"decimals": 0})("2.6") == "3"
     assert query.unit_converter({"convert_from": "cm", "convert_to": "ft", "decimals": 1})("-1") == "0.0"
     assert query.unit_converter({"decimals": 2})("on") == "on"
+    fi = query.unit_converter({"convert_from": "cm", "feet_inches": True, "decimals": 0})
+    assert [fi(v) for v in ("600.0", "-600", "0", "30.4", "-1", "332", "unknown")] == [
+        "19′ 8″", "-19′ 8″", "0′ 0″", "1′ 0″", "0′ 0″", "10′ 11″", "unknown"]
+    assert fi("29.9") == "1′ 0″"  # 11.8 in rounds up to a whole foot
+    with pytest.raises(query.QueryError):
+        query.unit_converter({"convert_from": "°C", "feet_inches": True})
 
 
 async def test_builder_steps_for_list_and_formats(hass, setup):
@@ -652,11 +658,11 @@ async def test_builder_steps_for_list_and_formats(hass, setup):
     await cfg(fid, {"next_step_id": "formats"})
     r = await cfg(fid, {"column": "t2.state", "convert_from": "cm", "convert_to": "°C", "decimals": 1})
     assert r["errors"] == {"base": "invalid_format"}
-    r = await cfg(fid, {"column": "t2.state", "convert_from": "cm", "convert_to": "ft", "decimals": 1})
+    r = await cfg(fid, {"column": "t2.state", "convert_from": "cm", "convert_to": "", "decimals": 0, "feet_inches": True})
     assert r["step_id"] == "menu"
     await cfg(fid, {"next_step_id": "save"})
     r = await cfg(fid, {})
     assert r["type"] == "create_entry"
     sub = next(s for s in entry.subentries.values() if s.title == "Area")
     assert sub.data["value_list"][0] == {"key": "mmwave_depth_minimum_near", "label": "mmWave Depth Minimum (near)"}
-    assert sub.data["formats"] == {"t2.state": {"convert_from": "cm", "convert_to": "ft", "decimals": 1}}
+    assert sub.data["formats"] == {"t2.state": {"convert_from": "cm", "convert_to": "", "decimals": 0, "feet_inches": True}}

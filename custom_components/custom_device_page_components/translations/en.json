@@ -311,10 +311,12 @@
             "convert_from": "Convert from",
             "convert_to": "Convert to",
             "decimals": "Decimals",
-            "remove": "Remove this column's format"
+            "remove": "Remove this column's format",
+            "feet_inches": "Show as feet and inches (e.g. 19′ 8″)"
           },
           "data_description": {
-            "convert_from": "The unit the values are stored in. Leave both units empty to only round."
+            "convert_from": "The unit the values are stored in. Leave both units empty to only round.",
+            "feet_inches": "For lengths: converts from the unit above and shows feet and inches; Convert to is ignored. Decimals apply to the inches."
           }
         }
       },
@@ -328,7 +330,7 @@
         "invalid_query": "The component can't be saved yet; fix the problem shown below.",
         "too_many_columns": "Pick at most 8 columns.",
         "list_too_long": "Your list can have at most 200 lines.",
-        "invalid_format": "Home Assistant can't convert between those units (choose two units of the same kind, e.g. cm and ft)."
+        "invalid_format": "Home Assistant can't convert between those units (choose two units of the same kind, e.g. cm and ft; feet and inches needs a length unit to convert from)."
       },
       "abort": {
         "reconfigure_successful": "Component saved."
