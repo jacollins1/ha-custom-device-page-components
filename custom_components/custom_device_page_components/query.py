@@ -43,7 +43,7 @@ SCHEMA: dict[str, dict[str, Any]] = {
             "device_id", "area_id", "effective_area_id", "config_entry_id",
             "display_name", "name", "original_name", "disabled_by",
             "hidden_by", "entity_category", "device_class",
-            "unit_of_measurement", "icon", "labels",
+            "unit_of_measurement", "icon", "labels", "setting_key",
         ],
     },
     "states": {
@@ -110,6 +110,12 @@ SCHEMA: dict[str, dict[str, Any]] = {
                     "group_platform", "member_entity_id", "member_device_id",
                     "depth", "via_group_entity_id", "via_group_name"],
     },
+    "value_list": {
+        # Typed into the component itself (step "Your list"): a small
+        # lookup table for friendly labels and a custom row order.
+        "label": "Your list (this component)",
+        "columns": ["key", "label", "position"],
+    },
     "relations": {
         "label": "Related items (built-in index)",
         "columns": ["device_id", "category", "title", "subtitle",
@@ -151,6 +157,8 @@ DEFAULT_LIMIT = 100
 # SQLite VM instructions before a query is aborted (protects the event loop
 # executor from runaway joins).
 MAX_VM_STEPS = 20_000_000
+MAX_LIST_ROWS = 200
+MAX_DECIMALS = 6
 
 
 class QueryError(ValueError):
@@ -252,6 +260,7 @@ def compile_spec(
     spec: dict[str, Any], device: dict[str, Any]
 ) -> tuple[str, list[Any], list[str]]:
     """Compile a spec to (sql, params, output column refs)."""
+    _check_value_list(spec)
     src = spec.get("source") or {}
     table = src.get("table")
     if table not in SCHEMA:
@@ -398,6 +407,11 @@ def compile_spec(
             extra.append(ref)
             select_sql.append(_col(aliases, ref))
 
+    for ref in (spec.get("formats") or {}):
+        if ref not in columns:
+            raise QueryError(f"A column format is set for {ref}, which is not shown")
+        unit_converter(spec["formats"][ref])
+
     sql = f"SELECT {', '.join(select_sql)} FROM {from_sql}"
     if conds_sql:
         sql += " WHERE " + joiner.join(f"({c})" for c in conds_sql)
@@ -425,6 +439,101 @@ def compile_spec(
     # One extra row tells us the result was truncated.
     sql += f" LIMIT {limit + 1}"
     return sql, params, columns + extra
+
+
+def _check_value_list(spec: dict[str, Any]) -> None:
+    rows = spec.get("value_list") or []
+    if not isinstance(rows, list) or len(rows) > MAX_LIST_ROWS:
+        raise QueryError(f"Your list can have at most {MAX_LIST_ROWS} lines")
+    for row in rows:
+        if not isinstance(row, dict) or not isinstance(row.get("key"), str):
+            raise QueryError("Each line of your list needs a key")
+
+
+def value_list_rows(spec: dict[str, Any]) -> list[tuple]:
+    """(key, label, position) rows of the component's own list."""
+    return [
+        (r["key"], r.get("label") or r["key"], i + 1)
+        for i, r in enumerate(spec.get("value_list") or [])
+    ]
+
+
+def parse_value_list(text: str) -> list[dict[str, str]]:
+    """'key = label' per line (label optional) -> list rows."""
+    rows: list[dict[str, str]] = []
+    for line in (text or "").splitlines():
+        if not line.strip():
+            continue
+        key, sep, label = line.partition("=")
+        key = key.strip()
+        if key:
+            rows.append({"key": key, "label": label.strip() if sep else key})
+    return rows
+
+
+def format_value_list(rows: list[dict[str, str]]) -> str:
+    return "\n".join(
+        r["key"] if r.get("label") in (None, "", r["key"]) else f"{r['key']} = {r['label']}"
+        for r in rows or []
+    )
+
+
+# --- column formats: unit conversion and rounding --------------------------
+
+def _converters() -> list[type]:
+    from homeassistant.util import unit_conversion as uc
+
+    out: list[type] = []
+    stack = list(uc.BaseUnitConverter.__subclasses__())
+    while stack:
+        cls = stack.pop()
+        stack.extend(cls.__subclasses__())
+        if getattr(cls, "VALID_UNITS", None):
+            out.append(cls)
+    return out
+
+
+def known_units() -> list[str]:
+    """Every unit Home Assistant can convert, sorted."""
+    return sorted({u for c in _converters() for u in c.VALID_UNITS if u})
+
+
+def unit_converter(fmt: dict[str, Any]):
+    """Validate a column format; return a value -> display text function."""
+    if not isinstance(fmt, dict):
+        raise QueryError("Invalid column format")
+    src, dst = fmt.get("convert_from") or None, fmt.get("convert_to") or None
+    decimals = fmt.get("decimals")
+    if decimals not in (None, ""):
+        decimals = int(decimals)
+        if not 0 <= decimals <= MAX_DECIMALS:
+            raise QueryError(f"Decimals must be between 0 and {MAX_DECIMALS}")
+    else:
+        decimals = None
+    convert = None
+    if src or dst:
+        if not (src and dst):
+            raise QueryError("A unit conversion needs both a from and a to unit")
+        conv = next(
+            (c for c in _converters() if src in c.VALID_UNITS and dst in c.VALID_UNITS),
+            None,
+        )
+        if conv is None:
+            raise QueryError(f"Home Assistant can't convert {src} to {dst}")
+        convert = conv.converter_factory(src, dst)
+
+    def apply(value: Any) -> Any:
+        if value is None or not _is_number(value):
+            return value
+        number = float(value)
+        if convert is not None:
+            number = convert(number)
+        if decimals is None:
+            return number
+        text = f"{number:.{decimals}f}"
+        return "0" + text[2:] if text.startswith("-0") and float(text) == 0 else text
+
+    return apply
 
 
 def _extra_refs(spec: dict[str, Any]) -> list[str]:
@@ -470,7 +579,7 @@ def run(
             cols = SCHEMA[name]["columns"]
             col_sql = ", ".join('"' + c + '"' for c in cols)
             conn.execute(f'CREATE TABLE "{name}" ({col_sql})')
-            rows = tables.get(name) or []
+            rows = value_list_rows(spec) if name == "value_list" else (tables.get(name) or [])
             if rows:
                 conn.executemany(
                     f'INSERT INTO "{name}" VALUES ({",".join("?" * len(cols))})',
@@ -499,6 +608,11 @@ def run(
     limit = spec.get("limit") or DEFAULT_LIMIT
     truncated = len(rows) > int(limit)
     rows = rows[: int(limit)]
+    for ref, fmt in (spec.get("formats") or {}).items():
+        idx = refs.index(ref)
+        apply = unit_converter(fmt)
+        for row in rows:
+            row[idx] = apply(row[idx])
     return QueryResult(
         columns=refs,
         labels=[column_label(spec, r) for r in refs],

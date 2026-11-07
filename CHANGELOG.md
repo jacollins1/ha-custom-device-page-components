@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.7 — 2026-11-06
+
+- Builder: **Your list** — a small `key = label` table typed into the component (columns key, label, position). Join it for friendly labels, and sort by position for your own row order.
+- Builder: **Column formats** — convert a shown column's numbers between units with Home Assistant's own unit converters (length, temperature, speed, …) and round to N decimals. Text values are left alone.
+- Entities table: **setting_key** — the entity's translation key, or its original name as a slug. The same setting gets the same key across integrations (e.g. a ZHA and a Z-Wave Inovelli switch both give `mmwave_depth_minimum_near`).
+
 ## 0.1.6 — 2026-11-06
 
 - Group members include nested groups: a device in *Kitchen Lights*, which is inside *All Lights*, is a member of both. New columns `depth` (1 = listed directly) and `via_group_entity_id` / `via_group_name` (the group that lists the member directly). Nesting is followed only through group helpers; loops are cut. An "Automations (Group)" component built from the README recipe therefore also lists automations that use an outer group.

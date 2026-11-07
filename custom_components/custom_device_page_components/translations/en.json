@@ -90,12 +90,14 @@
           "description": "{summary}",
           "menu_options": {
             "basics": "Name and look",
+            "value_list": "Your list (labels and custom order)",
             "source": "Source table (FROM)",
             "joins": "Joins (JOIN)",
             "where": "Conditions (WHERE)",
             "group": "Grouping and summaries (GROUP BY)",
             "sort": "Sorting and row limit (ORDER BY, LIMIT)",
             "columns": "Columns and row link",
+            "formats": "Column formats (unit conversion, decimals)",
             "actions": "Row actions",
             "devices": "Which device pages",
             "preview": "Preview",
@@ -293,6 +295,27 @@
         "save": {
           "title": "Save the component",
           "description": "{summary}\n\n{error}"
+        },
+        "value_list": {
+          "title": "Your list",
+          "description": "A small table that lives in this component, for friendly labels and your own row order. One line per row: `key = label` (the label is optional). Join it like any table — its columns are key, label and position (1, 2, 3 … in the order typed) — and sort by position to keep your order.",
+          "data": {
+            "lines": "Lines"
+          }
+        },
+        "formats": {
+          "title": "Column formats",
+          "description": "Convert a shown column's numbers from one unit to another (Home Assistant's own converters) and round them. Text values are left as they are.\n\nCurrent formats:\n{current}",
+          "data": {
+            "column": "Column",
+            "convert_from": "Convert from",
+            "convert_to": "Convert to",
+            "decimals": "Decimals",
+            "remove": "Remove this column's format"
+          },
+          "data_description": {
+            "convert_from": "The unit the values are stored in. Leave both units empty to only round."
+          }
         }
       },
       "error": {
@@ -303,7 +326,9 @@
         "action_blocked": "This action is blocked.",
         "target_not_grouped": "With grouping, the target column must be one of the grouped columns.",
         "invalid_query": "The component can't be saved yet; fix the problem shown below.",
-        "too_many_columns": "Pick at most 8 columns."
+        "too_many_columns": "Pick at most 8 columns.",
+        "list_too_long": "Your list can have at most 200 lines.",
+        "invalid_format": "Home Assistant can't convert between those units (choose two units of the same kind, e.g. cm and ft)."
       },
       "abort": {
         "reconfigure_successful": "Component saved."

@@ -14,6 +14,7 @@ import re
 from typing import Any
 
 from homeassistant.const import STATE_UNAVAILABLE
+from homeassistant.util import slugify
 from homeassistant.core import Event, HomeAssistant, callback
 from homeassistant.helpers import (
     area_registry as ar,
@@ -396,6 +397,7 @@ class SnapshotManager:
                         e.device_class or e.original_device_class,
                         e.unit_of_measurement, e.icon or e.original_icon,
                         ",".join(sorted(e.labels)),
+                        e.translation_key or (slugify(e.original_name) if e.original_name else None),
                     )
                 )
             out["entities"] = rows

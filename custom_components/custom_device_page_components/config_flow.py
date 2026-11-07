@@ -31,6 +31,7 @@ from homeassistant.helpers.selector import (
     SelectSelectorConfig,
     SelectSelectorMode,
     TextSelector,
+    TextSelectorConfig,
 )
 
 from . import query
@@ -275,6 +276,8 @@ EMPTY_SPEC: dict[str, Any] = {
     "row_link": {"type": "none"},
     "actions": [],
     "device_filter": {"types": [], "statuses": [], "integrations": [], "areas": []},
+    "value_list": [],
+    "formats": {},
 }
 
 OP_LABELS = {
@@ -475,9 +478,9 @@ class ComponentFlow(ConfigSubentryFlow):
         self, user_input: dict[str, Any] | None = None
     ) -> SubentryFlowResult:
         """Hub of the builder."""
-        options = ["basics", "source"]
+        options = ["basics", "value_list", "source"]
         if self.spec["source"].get("table"):
-            options += ["joins", "where", "group", "sort", "columns", "actions", "devices", "preview"]
+            options += ["joins", "where", "group", "sort", "columns", "formats", "actions", "devices", "preview"]
         options.append("save")
         return self.async_show_menu(
             step_id="menu",
@@ -875,6 +878,10 @@ class ComponentFlow(ConfigSubentryFlow):
                 errors["link_column"] = "link_column_required"
             else:
                 self.spec["columns"] = user_input.get("columns", [])
+                self.spec["formats"] = {
+                    k: v for k, v in (self.spec.get("formats") or {}).items()
+                    if k in self.spec["columns"]
+                }
                 self.spec["row_link"] = {"type": link_type, "column": link_col}
                 if user_input.get("rename"):
                     return await self.async_step_rename_column()
@@ -936,6 +943,87 @@ class ComponentFlow(ConfigSubentryFlow):
                     vol.Optional("label", default=""): TextSelector(),
                 }
             ),
+        )
+
+    # -- your list ----------------------------------------------------------
+    async def async_step_value_list(
+        self, user_input: dict[str, Any] | None = None
+    ) -> SubentryFlowResult:
+        """A small lookup table typed into the component: key = label."""
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            rows = query.parse_value_list(user_input.get("lines", ""))
+            if len(rows) > query.MAX_LIST_ROWS:
+                errors["lines"] = "list_too_long"
+            else:
+                self.spec["value_list"] = rows
+                return await self.async_step_menu()
+        return self.async_show_form(
+            step_id="value_list",
+            data_schema=vol.Schema(
+                {
+                    vol.Optional(
+                        "lines", default=query.format_value_list(self.spec.get("value_list") or [])
+                    ): TextSelector(TextSelectorConfig(multiline=True)),
+                }
+            ),
+            errors=errors,
+        )
+
+    # -- column formats -----------------------------------------------------
+    async def async_step_formats(
+        self, user_input: dict[str, Any] | None = None
+    ) -> SubentryFlowResult:
+        """Unit conversion and rounding for one shown column."""
+        errors: dict[str, str] = {}
+        formats = self.spec.setdefault("formats", {})
+        if user_input is not None:
+            ref = user_input["column"]
+            if user_input.get("remove"):
+                formats.pop(ref, None)
+                return await self.async_step_menu()
+            fmt = {
+                "convert_from": user_input.get("convert_from") or "",
+                "convert_to": user_input.get("convert_to") or "",
+                "decimals": "" if user_input.get("decimals") in (None, "") else int(user_input["decimals"]),
+            }
+            try:
+                query.unit_converter(fmt)
+            except query.QueryError:
+                errors["base"] = "invalid_format"
+            else:
+                formats[ref] = fmt
+                return await self.async_step_menu()
+        units = [SelectOptionDict(value="", label="—")] + [
+            SelectOptionDict(value=u, label=u) for u in query.known_units()
+        ]
+        shown = self.spec["columns"]
+        first = shown[0] if shown else ""
+        cur = formats.get(first, {})
+        return self.async_show_form(
+            step_id="formats",
+            data_schema=vol.Schema(
+                {
+                    vol.Required("column", default=first): _select(
+                        [SelectOptionDict(value=c, label=query.column_label(self.spec, c)) for c in shown]
+                    ),
+                    vol.Optional("convert_from", default=cur.get("convert_from", "")): _select(units),
+                    vol.Optional("convert_to", default=cur.get("convert_to", "")): _select(units),
+                    vol.Optional("decimals"): NumberSelector(
+                        NumberSelectorConfig(min=0, max=query.MAX_DECIMALS, mode=NumberSelectorMode.BOX)
+                    ),
+                    vol.Optional("remove", default=False): BooleanSelector(),
+                }
+            ),
+            errors=errors,
+            description_placeholders={
+                "current": "\n".join(
+                    f"- {query.column_label(self.spec, k)}: "
+                    + (f"{v['convert_from']} → {v['convert_to']}" if v.get("convert_from") else "no conversion")
+                    + (f", {v['decimals']} decimals" if v.get("decimals") not in (None, "") else "")
+                    for k, v in formats.items()
+                ) or "None yet."
+            },
         )
 
     # -- actions ------------------------------------------------------------

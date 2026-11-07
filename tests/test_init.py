@@ -546,3 +546,117 @@ async def test_confirm_config_changes_option(hass, setup, hass_ws_client):
     assert r["type"] == "create_entry"
     await client.send_json_auto_id({"type": f"{DOMAIN}/device", "device_id": setup["dev"].id})
     assert (await client.receive_json())["result"]["confirm_config_changes"] is True
+
+
+MMWAVE_KEYS = [
+    ("mmwave_depth_minimum_near", "mmWave Depth Minimum (near)"),
+    ("mmwave_depth_maximum_far", "mmWave Depth Maximum (far)"),
+    ("mmwave_height_minimum_floor", "mmWave Height Minimum (floor)"),
+    ("mmwave_height_maximum_ceiling", "mmWave Height Maximum (ceiling)"),
+    ("mmwave_width_minimum_left", "mmWave Width Minimum (left)"),
+    ("mmwave_width_maximum_right", "mmWave Width Maximum (right)"),
+]
+DETECTION_AREA = {
+    "name": "Inovelli Detection Area (ft)", "title": "Inovelli Detection Area (ft)",
+    "style": "table", "column": 1, "order": 20, "enabled": True, "empty_text": "No mmWave settings",
+    "value_list": [{"key": k, "label": v} for k, v in MMWAVE_KEYS],
+    "source": {"table": "entities", "alias": "t0"},
+    "joins": [
+        {"type": "inner", "table": "value_list", "alias": "t1", "left": "t0.setting_key", "right": "t1.key"},
+        {"type": "inner", "table": "states", "alias": "t2", "left": "t0.entity_id", "right": "t2.entity_id"},
+    ],
+    "where": {"match": "all", "conditions": [
+        {"column": "t0.device_id", "op": "eq", "value_source": "device.id", "value": ""}]},
+    "group_by": [], "aggregates": [],
+    "order_by": [{"column": "t1.position", "direction": "asc"}],
+    "limit": 100, "columns": ["t1.label", "t2.state"], "labels": {"t1.label": "Setting", "t2.state": "Feet"},
+    "formats": {"t2.state": {"convert_from": "cm", "convert_to": "ft", "decimals": 1}},
+    "row_link": {"type": "none"}, "actions": [],
+    "device_filter": {"types": ["model:Inovelli|VZM32-SN", "model:Inovelli|VZW32-SN"],
+                      "statuses": [], "integrations": [], "areas": []},
+}
+
+
+async def test_inovelli_detection_area_in_feet(hass, setup):
+    """Your list + setting_key + cm→ft format, across ZHA (translation keys) and Z-Wave (names)."""
+    from custom_components.custom_device_page_components import filters, query
+    dev_reg, ent_reg = dr.async_get(hass), er.async_get(hass)
+    zha_entry = MockConfigEntry(domain="zha"); zha_entry.add_to_hass(hass)
+    zw_entry = MockConfigEntry(domain="zwave_js"); zw_entry.add_to_hass(hass)
+    vzm = dev_reg.async_get_or_create(config_entry_id=zha_entry.entry_id, identifiers={("zha", "aa")},
+                                      manufacturer="Inovelli", model="VZM32-SN", name="Office")
+    vzw = dev_reg.async_get_or_create(config_entry_id=zw_entry.entry_id, identifiers={("zwave_js", "bb")},
+                                      manufacturer="Inovelli", model="VZW32-SN", name="Garage")
+    zha_vals = {"mmwave_depth_maximum_far": "332", "mmwave_depth_minimum_near": "0",
+                "mmwave_height_minimum_floor": "-75", "mmwave_height_maximum_ceiling": "75",
+                "mmwave_width_minimum_left": "-55", "mmwave_width_maximum_right": "572",
+                "mmwave_stay_life": "300"}
+    for key, val in zha_vals.items():
+        e = ent_reg.async_get_or_create("number", "zha", f"aa-{key}", device_id=vzm.id,
+                                        translation_key=key, original_name=key.replace("_", " "))
+        hass.states.async_set(e.entity_id, val)
+    zw_names = {"mmWave Depth Maximum (Far)": "600.0", "mmWave Depth Minimum (Near)": "0.0",
+                "mmWave Height Minimum (Floor)": "-100.0", "mmWave Height Maximum (Ceiling)": "100.0",
+                "mmWave Width Minimum (Left)": "-307.0", "mmWave Width Maximum (Right)": "276.0",
+                "mmWave Detection Timeout": "30"}
+    for name, val in zw_names.items():
+        e = ent_reg.async_get_or_create("number", "zwave_js", f"bb-{name}", device_id=vzw.id, original_name=name)
+        hass.states.async_set(e.entity_id, val, {"unit_of_measurement": "cm"})
+    query.validate(DETECTION_AREA)
+    runtime = setup["entry"].runtime_data
+    labels = [v for _, v in MMWAVE_KEYS]
+    res = await runtime.async_run_spec(DETECTION_AREA, vzm.id)
+    assert res.labels == ["Setting", "Feet"]
+    assert [tuple(r) for r in res.rows] == list(zip(labels, ["0.0", "10.9", "-2.5", "2.5", "-1.8", "18.8"]))
+    res = await runtime.async_run_spec(DETECTION_AREA, vzw.id)
+    assert [tuple(r) for r in res.rows] == list(zip(labels, ["0.0", "19.7", "-3.3", "3.3", "-10.1", "9.1"]))
+    # only Inovelli VZM32-SN / VZW32-SN device pages
+    flt = DETECTION_AREA["device_filter"]
+    assert filters.device_matches(hass, vzm, flt, True) and filters.device_matches(hass, vzw, flt, True)
+    assert not filters.device_matches(hass, setup["dev"], flt, True)
+
+
+async def test_formats_and_value_list_validation():
+    from custom_components.custom_device_page_components import query
+    bad = {**DETECTION_AREA, "formats": {"t2.state": {"convert_from": "cm", "convert_to": "°C"}}}
+    with pytest.raises(query.QueryError):
+        query.validate(bad)
+    with pytest.raises(query.QueryError):  # format on a column that isn't shown
+        query.validate({**DETECTION_AREA, "formats": {"t0.entity_id": {"decimals": 1}}})
+    assert query.parse_value_list("a = A\n\n b \nc=") == [
+        {"key": "a", "label": "A"}, {"key": "b", "label": "b"}, {"key": "c", "label": ""}]
+    assert query.unit_converter({"decimals": 0})("2.6") == "3"
+    assert query.unit_converter({"convert_from": "cm", "convert_to": "ft", "decimals": 1})("-1") == "0.0"
+    assert query.unit_converter({"decimals": 2})("on") == "on"
+
+
+async def test_builder_steps_for_list_and_formats(hass, setup):
+    """The two new builder steps store what the spec above holds."""
+    entry = setup["entry"]
+    r = await hass.config_entries.subentries.async_init((entry.entry_id, "component"), context={"source": "user"})
+    fid = r["flow_id"]
+    cfg = hass.config_entries.subentries.async_configure
+    await cfg(fid, {"name": "Area", "title": "Area", "style": "table", "column": "1", "order": 20, "enabled": True})
+    r = await cfg(fid, {"next_step_id": "value_list"})
+    assert r["step_id"] == "value_list"
+    await cfg(fid, {"lines": "\n".join(f"{k} = {v}" for k, v in MMWAVE_KEYS)})
+    await cfg(fid, {"next_step_id": "source"}); await cfg(fid, {"table": "entities"})
+    await cfg(fid, {"next_step_id": "joins"}); await cfg(fid, {"next_step_id": "add_join"})
+    await cfg(fid, {"type": "inner", "table": "value_list"})
+    r = await cfg(fid, {"left": "t0.setting_key", "right": "t1.key"})
+    assert r["step_id"] == "joins"
+    await cfg(fid, {"next_step_id": "add_join"}); await cfg(fid, {"type": "inner", "table": "states"})
+    await cfg(fid, {"left": "t0.entity_id", "right": "t2.entity_id"}); await cfg(fid, {"next_step_id": "menu"})
+    await cfg(fid, {"next_step_id": "columns"})
+    await cfg(fid, {"columns": ["t1.label", "t2.state"], "link_type": "none", "link_column": "", "rename": False})
+    await cfg(fid, {"next_step_id": "formats"})
+    r = await cfg(fid, {"column": "t2.state", "convert_from": "cm", "convert_to": "°C", "decimals": 1})
+    assert r["errors"] == {"base": "invalid_format"}
+    r = await cfg(fid, {"column": "t2.state", "convert_from": "cm", "convert_to": "ft", "decimals": 1})
+    assert r["step_id"] == "menu"
+    await cfg(fid, {"next_step_id": "save"})
+    r = await cfg(fid, {})
+    assert r["type"] == "create_entry"
+    sub = next(s for s in entry.subentries.values() if s.title == "Area")
+    assert sub.data["value_list"][0] == {"key": "mmwave_depth_minimum_near", "label": "mmWave Depth Minimum (near)"}
+    assert sub.data["formats"] == {"t2.state": {"convert_from": "cm", "convert_to": "ft", "decimals": 1}}

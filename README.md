@@ -61,12 +61,16 @@ builder:
 | Conditions | Keep matching rows; values can be typed or taken from the device whose page is open | `WHERE … AND / OR` |
 | Grouping and summaries | Count, min, max, sum, average, list | `GROUP BY` |
 | Sorting and row limit | Up to three sort columns, 1–500 rows | `ORDER BY`, `LIMIT` |
+| Your list | A small key = label table typed into the component, for friendly labels and your own row order | `VALUES` |
 | Columns and row link | Up to 8 columns, and what a row opens (entity, device, area, integration entry, page). In *List* style the first column is the link and each other column is a small grey line under it, like the Related card | `SELECT` |
+| Column formats | Convert a column's numbers between units (Home Assistant's own converters, e.g. cm → ft) and round them | — |
 | Row actions | A button per row that runs a Home Assistant action | — |
 | Which device pages | Device type (manufacturer/model, device or service), status (enabled/disabled, available/unavailable), integration, area | — |
 | Preview | Runs the component for a device you pick | — |
 
-Tables: devices, device ↔ integration entries, entities, current states,
+Tables: devices, device ↔ integration entries, entities (with `setting_key`: the
+entity's translation key, or its original name as a slug, so the same setting
+matches across integrations), current states,
 areas, floors, labels, device/entity ↔ labels, integration entries,
 dashboards, dashboard references, automations (name, Active/Inactive, link to
 the editor), automation and script references (with the part — trigger,
@@ -74,6 +78,14 @@ condition or action — that makes the reference), group members (every group
 entity and its members, with the group's platform, e.g. `group` for group
 helpers; members of group helpers inside a group count too, with their depth
 and the group that lists them directly), and the Related index.
+
+**Recipe — a device's settings in other units** (e.g. Inovelli mmWave
+detection area in feet): *Your list* with one line per setting,
+`mmwave_depth_minimum_near = mmWave Depth Minimum (near)` and so on; source
+*entities*; inner join *Your list* on setting key = key and *current states*
+on entity = entity; condition device = *this device*; sort by list position;
+columns label and state; column format on state: cm → ft, 1 decimal; *Which
+device pages*: the device models.
 
 **Recipe — automations that use a group this device is in**: source
 *automation references*; join *group members* on reference entity = group
