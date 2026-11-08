@@ -13,11 +13,13 @@ from homeassistant.helpers import device_registry as dr, issue_registry as ir
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.util import dt as dt_util
 
-from . import query
+from . import mmwave, query
 from .actions import ActionRefused, action_level, async_run_action
 from .const import (
     COLUMNS,
     CONF_CONFIRM_CONFIG,
+    CONF_MMWAVE,
+    CONF_MMWAVE_COLUMN,
     CONF_RELATED,
     CONF_RELATED_COLUMN,
     CONF_RELATED_ORDER,
@@ -147,6 +149,10 @@ class Runtime:
                     "column": _column(opts.get(CONF_RELATED_COLUMN, 1)),
                     "related": related,
                 }
+            )
+        if opts.get(CONF_MMWAVE, True) and mmwave.is_mmwave_device(device):
+            comps.append(
+                mmwave.component_payload(30, _column(opts.get(CONF_MMWAVE_COLUMN, 3)))
             )
         available = self.snapshot.device_available(device_id)
         for sub_id, spec in self.components:

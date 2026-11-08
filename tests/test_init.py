@@ -10,6 +10,7 @@ from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.helpers import device_registry as dr, entity_registry as er, issue_registry as ir
 from homeassistant.setup import async_setup_component
 
+from custom_components.custom_device_page_components.actions import ActionRefused
 from custom_components.custom_device_page_components.const import DOMAIN
 
 # Options as 0.1.0/0.1.1 stored them (one box, one unit): the fixture's entry
@@ -666,3 +667,135 @@ async def test_builder_steps_for_list_and_formats(hass, setup):
     sub = next(s for s in entry.subentries.values() if s.title == "Area")
     assert sub.data["value_list"][0] == {"key": "mmwave_depth_minimum_near", "label": "mmWave Depth Minimum (near)"}
     assert sub.data["formats"] == {"t2.state": {"convert_from": "cm", "convert_to": "", "decimals": 0, "feet_inches": True}}
+
+
+# --- Inovelli mmWave interference area ------------------------------------
+
+ZHA_IEEE = "0c:2a:6f:ff:fe:d5:7e:a9"
+
+
+def _mm_devices(hass):
+    dev_reg = dr.async_get(hass)
+    zha_entry = MockConfigEntry(domain="zha"); zha_entry.add_to_hass(hass)
+    zw_entry = MockConfigEntry(domain="zwave_js"); zw_entry.add_to_hass(hass)
+    vzm = dev_reg.async_get_or_create(config_entry_id=zha_entry.entry_id, identifiers={("zha", ZHA_IEEE)},
+                                      manufacturer="Inovelli", model="VZM32-SN", name="Office Overhead")
+    vzw = dev_reg.async_get_or_create(config_entry_id=zw_entry.entry_id, identifiers={("zwave_js", "123-45")},
+                                      manufacturer="Inovelli", model="VZW32-SN", name="Entranceway Overhead")
+    return vzm, vzw
+
+
+async def test_mmwave_payloads(hass, setup):
+    """Exactly the calls verified live on 2026-11-07."""
+    from custom_components.custom_device_page_components import mmwave
+    vzm, vzw = _mm_devices(hass)
+    for cmd, val in (("generate", 1), ("clear", 3)):
+        call = mmwave.build_call(vzm, cmd)
+        assert (call.domain, call.service, call.target) == ("zha", "issue_zigbee_cluster_command", None)
+        assert call.data == {"ieee": ZHA_IEEE, "endpoint_id": 1, "cluster_id": 64562, "cluster_type": "in",
+                             "command": 0, "command_type": "server", "params": {"control_id": val}}
+        call = mmwave.build_call(vzw, cmd)
+        assert (call.domain, call.service) == ("zwave_js", "set_config_parameter")
+        assert call.data == {"parameter": 111, "value": val}
+        assert call.target == {"device_id": vzw.id}
+    with pytest.raises(ActionRefused):
+        mmwave.build_call(vzm, "reset")
+    with pytest.raises(ActionRefused):  # not an Inovelli mmWave switch
+        mmwave.build_call(setup["dev"], "generate")
+    other = dr.async_get(hass).async_get_or_create(
+        config_entry_id=setup["entry"].entry_id, identifiers={("zha", "00:00:00:00:00:00:00:01")},
+        manufacturer="Inovelli", model="VZM31-SN", name="Dimmer")
+    with pytest.raises(ActionRefused):
+        mmwave.build_call(other, "generate")
+    assert mmwave.is_mmwave_device(vzm) and mmwave.is_mmwave_device(vzw)
+    assert not mmwave.is_mmwave_device(other) and not mmwave.is_mmwave_device(setup["dev"])
+
+
+async def test_mmwave_policy_allow_and_deny(hass, setup):
+    """Only control_id / value 1 and 3, only the right shape, model and device."""
+    from custom_components.custom_device_page_components import mmwave
+    from custom_components.custom_device_page_components.actions import action_level, mmwave_call_allowed
+    vzm, vzw = _mm_devices(hass)
+
+    def zha(cid, **over):
+        data = {"ieee": ZHA_IEEE, "endpoint_id": 1, "cluster_id": 64562, "cluster_type": "in",
+                "command": 0, "command_type": "server", "params": {"control_id": cid}}
+        data.update(over)
+        return mmwave_call_allowed("zha", "issue_zigbee_cluster_command", data, None, "VZM32-SN", vzm)
+
+    def zw(value, parameter=111, model="VZW32-SN", target=None, extra=None):
+        data = {"parameter": parameter, "value": value, **(extra or {})}
+        return mmwave_call_allowed("zwave_js", "set_config_parameter", data,
+                                   target or {"device_id": vzw.id}, model, vzw)
+
+    assert zha(1) and zha(3) and zw(1) and zw(3)
+    for bad in (0, 2, 4, 5, 6, 255, "1", 1.0, None, True):
+        assert not zha(bad), bad
+        assert not zw(bad), bad
+    assert not zha(1, cluster_id=64561)
+    assert not zha(1, command=1)  # set_interference_area (manual coordinates)
+    assert not zha(1, endpoint_id=2)
+    assert not zha(1, command_type="client")
+    assert not zha(1, cluster_type="out")
+    assert not zha(1, ieee="00:00:00:00:00:00:00:01")  # not this device
+    assert not zha(1, params={"control_id": 1, "area_id": 1})
+    assert not mmwave_call_allowed("zha", "issue_zigbee_cluster_command",
+                                   {"ieee": ZHA_IEEE, "endpoint_id": 1, "cluster_id": 64562, "cluster_type": "in",
+                                    "command": 0, "command_type": "server", "params": {"control_id": 1}},
+                                   None, "VZW32-SN", vzm)  # wrong model
+    assert not zw(1, parameter=110)
+    assert not zw(1, model="VZM32-SN")
+    assert not zw(1, target={"device_id": "someone-else"})
+    assert not zw(1, target={"entity_id": "light.x"})
+    assert not zw(1, extra={"endpoint": 0})
+    assert not mmwave_call_allowed("zwave_js", "bulk_set_partial_config_parameters",
+                                   {"parameter": 111, "value": 1}, {"device_id": vzw.id}, "VZW32-SN", vzw)
+    # the general row-action policy is unchanged
+    assert action_level("zwave_js.set_config_parameter") == "blocked"
+    assert action_level("zha.issue_zigbee_cluster_command") == "blocked"
+    assert action_level("light.clear_something") == "blocked"
+
+
+async def test_mmwave_websocket_and_page(hass, setup, hass_ws_client, hass_admin_user):
+    """Card only on VZM32-SN/VZW32-SN pages; confirmed press calls the action as the presser."""
+    from homeassistant.core import ServiceCall
+    vzm, vzw = _mm_devices(hass)
+    calls: list[ServiceCall] = []
+
+    async def record(call: ServiceCall) -> None:
+        calls.append(call)
+
+    hass.services.async_register("zha", "issue_zigbee_cluster_command", record)
+    hass.services.async_register("zwave_js", "set_config_parameter", record)
+    client = await hass_ws_client(hass)
+
+    async def ws(**msg):
+        await client.send_json_auto_id(msg)
+        return await client.receive_json()
+
+    page = await ws(type=f"{DOMAIN}/device", device_id=vzm.id)
+    mm = [c for c in page["result"]["components"] if c["type"] == "mmwave"]
+    assert len(mm) == 1 and mm[0]["column"] == 3
+    assert [b["label"] for b in mm[0]["buttons"]] == ["Generate interference area", "Clear interference area"]
+    assert "20 seconds" in mm[0]["buttons"][0]["confirm_text"] and "orange" in mm[0]["buttons"][0]["confirm_text"]
+    assert "Clear interference area" in mm[0]["buttons"][0]["confirm_text"]
+    page = await ws(type=f"{DOMAIN}/device", device_id=setup["dev"].id)
+    assert not [c for c in page["result"]["components"] if c["type"] == "mmwave"]
+
+    r = await ws(type=f"{DOMAIN}/mmwave_command", device_id=vzm.id, command="generate", confirmed=False)
+    assert not r["success"] and not calls
+    r = await ws(type=f"{DOMAIN}/mmwave_command", device_id=setup["dev"].id, command="generate", confirmed=True)
+    assert not r["success"] and not calls
+    r = await ws(type=f"{DOMAIN}/mmwave_command", device_id=vzm.id, command="reset", confirmed=True)
+    assert not r["success"] and not calls
+
+    r = await ws(type=f"{DOMAIN}/mmwave_command", device_id=vzm.id, command="generate", confirmed=True)
+    assert r["success"], r
+    assert calls[-1].domain == "zha" and calls[-1].data["params"] == {"control_id": 1}
+    assert calls[-1].data["ieee"] == ZHA_IEEE
+    assert calls[-1].context.user_id == hass_admin_user.id
+    r = await ws(type=f"{DOMAIN}/mmwave_command", device_id=vzw.id, command="clear", confirmed=True)
+    assert r["success"], r
+    assert calls[-1].domain == "zwave_js" and calls[-1].data["parameter"] == 111 and calls[-1].data["value"] == 3
+    assert calls[-1].data["device_id"] == vzw.id  # target merged into the call by HA
+    assert len(calls) == 2

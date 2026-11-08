@@ -6,7 +6,7 @@ from typing import Final
 
 DOMAIN: Final = "custom_device_page_components"
 NAME: Final = "Custom Device Page Components"
-VERSION: Final = "0.1.8"
+VERSION: Final = "0.1.9"
 
 # Lowest Home Assistant release this version is written and tested for.
 MIN_HA_VERSION: Final = "2026.2.0"
@@ -28,6 +28,8 @@ CONF_COLOR_TEMP_UNIT: Final = "color_temp_unit"
 CONF_COLOR_TEMP_MODELS: Final = "color_temp_models"
 CONF_BINDINGS: Final = "bindings_enabled"
 CONF_CONFIRM_CONFIG: Final = "confirm_config_changes"
+CONF_MMWAVE: Final = "mmwave_interference_enabled"
+CONF_MMWAVE_COLUMN: Final = "mmwave_interference_column"
 
 UNIT_KELVIN: Final = "kelvin"
 UNIT_MIREDS: Final = "mireds"
@@ -41,6 +43,8 @@ DEFAULT_OPTIONS: Final = {
     CONF_COLOR_TEMP_MODELS: [],
     CONF_BINDINGS: True,
     CONF_CONFIRM_CONFIG: False,
+    CONF_MMWAVE: True,
+    CONF_MMWAVE_COLUMN: 3,
 }
 
 STATIC_URL: Final = f"/{DOMAIN}_static"

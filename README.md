@@ -41,6 +41,14 @@ stops appearing (device pages keep working) and Home Assistant shows a
   bindings* on the integration's own device. Reads only happen when you press
   a button; nothing is bound or unbound.
 
+- **Inovelli mmWave interference area** (VZM32-SN on ZHA, VZW32-SN on
+  Z-Wave JS only): a card with *Generate interference area* and *Clear
+  interference area*. Generate tells the switch's mmWave module to scan the
+  room (about 20 s, LED bar pulses orange) and store whatever is moving —
+  HVAC airflow, fans, curtains, **and anyone in view** — as interference it
+  then ignores. Each button asks for confirmation; the undo is Clear. The
+  switch acknowledges the command but reports nothing about the stored map.
+
 **Confirm config changes** (option, off by default): when on, changing any
 control in a device page's *Configuration* section first asks **Save
 config?** with the old and new value. *Cancel* (or Escape, or tapping outside)
@@ -134,6 +142,13 @@ to its own device page.
     pressed.
   - **Always confirmed**: locks, alarms, covers, valves, climate off/mode,
     `button.press`, turning switches/automations off, scripts, notifications.
+- **One narrow exception for the Inovelli mmWave card**: it may send exactly
+  `zwave_js.set_config_parameter` (parameter 111, value 1 or 3) to a
+  VZW32-SN, and `zha.issue_zigbee_cluster_command` (cluster 0xFC32,
+  endpoint 1, command 0, `control_id` 1 or 3) to a VZM32-SN, built from the
+  open device page and re-checked on the server. Factory reset (0), reset
+  detection area (4) and the other values stay blocked, and row actions still
+  can't call either action.
 - **Administrators only.** Device pages are admin-only in Home Assistant; every
   command of this integration checks for an administrator too.
 - **Warnings before destructive changes**: turning a built-in off lists the

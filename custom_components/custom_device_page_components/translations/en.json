@@ -12,14 +12,17 @@
           "color_temp_mireds_enabled": "Color temperature box on light devices (mireds)",
           "color_temp_models": "Only these models (empty = every color-temperature light)",
           "bindings_enabled": "Zigbee bindings (ZHA): Bound to / Bound from / Read bindings",
-          "confirm_config_changes": "Confirm config changes"
+          "confirm_config_changes": "Confirm config changes",
+          "mmwave_interference_enabled": "Inovelli mmWave interference area card (VZM32-SN / VZW32-SN)",
+          "mmwave_interference_column": "Device page column of the mmWave card"
         },
         "data_description": {
           "related_order": "Cards are sorted by this number; custom components default to 10.",
           "color_temp_models": "Pick models, or type a model or model ID.",
           "bindings_enabled": "Reads binding tables only when you press a button. Uses ZHA internals, so a ZHA update can break this part on its own.",
           "color_temp_mireds_enabled": "With both on, each light shows both boxes; they always show the same temperature.",
-          "confirm_config_changes": "Ask \"Save config?\" before a change made in a device page's Configuration section is sent to the device. Cancel puts the control back to its current value."
+          "confirm_config_changes": "Ask \"Save config?\" before a change made in a device page's Configuration section is sent to the device. Cancel puts the control back to its current value.",
+          "mmwave_interference_enabled": "Generate / Clear interference area buttons on Inovelli mmWave switch pages. Each asks for confirmation first; only these two commands can be sent."
         }
       }
     },
@@ -40,14 +43,17 @@
           "color_temp_mireds_enabled": "Color temperature box on light devices (mireds)",
           "color_temp_models": "Only these models (empty = every color-temperature light)",
           "bindings_enabled": "Zigbee bindings (ZHA): Bound to / Bound from / Read bindings",
-          "confirm_config_changes": "Confirm config changes"
+          "confirm_config_changes": "Confirm config changes",
+          "mmwave_interference_enabled": "Inovelli mmWave interference area card (VZM32-SN / VZW32-SN)",
+          "mmwave_interference_column": "Device page column of the mmWave card"
         },
         "data_description": {
           "related_order": "Cards are sorted by this number; custom components default to 10.",
           "color_temp_models": "Pick models, or type a model or model ID.",
           "bindings_enabled": "Reads binding tables only when you press a button. Uses ZHA internals, so a ZHA update can break this part on its own.",
           "color_temp_mireds_enabled": "With both on, each light shows both boxes; they always show the same temperature.",
-          "confirm_config_changes": "Ask \"Save config?\" before a change made in a device page's Configuration section is sent to the device. Cancel puts the control back to its current value."
+          "confirm_config_changes": "Ask \"Save config?\" before a change made in a device page's Configuration section is sent to the device. Cancel puts the control back to its current value.",
+          "mmwave_interference_enabled": "Generate / Clear interference area buttons on Inovelli mmWave switch pages. Each asks for confirmation first; only these two commands can be sent."
         }
       },
       "confirm_remove": {

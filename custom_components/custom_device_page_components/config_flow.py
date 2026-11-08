@@ -40,6 +40,8 @@ from .const import (
     COLUMNS,
     CONF_BINDINGS,
     CONF_CONFIRM_CONFIG,
+    CONF_MMWAVE,
+    CONF_MMWAVE_COLUMN,
     CONF_COLOR_TEMP_KELVIN,
     CONF_COLOR_TEMP_MIREDS,
     CONF_COLOR_TEMP_MODELS,
@@ -100,6 +102,12 @@ def _builtin_schema(hass, defaults: dict[str, Any]) -> vol.Schema:
             vol.Required(
                 CONF_CONFIRM_CONFIG, default=defaults[CONF_CONFIRM_CONFIG]
             ): BooleanSelector(),
+            vol.Required(
+                CONF_MMWAVE, default=defaults.get(CONF_MMWAVE, True)
+            ): BooleanSelector(),
+            vol.Required(
+                CONF_MMWAVE_COLUMN, default=str(defaults.get(CONF_MMWAVE_COLUMN, 3))
+            ): _column_select(),
         }
     )
 
@@ -146,6 +154,7 @@ def _clean(user_input: dict[str, Any]) -> dict[str, Any]:
     out = dict(user_input)
     out[CONF_RELATED_ORDER] = int(out.get(CONF_RELATED_ORDER, 0))
     out[CONF_RELATED_COLUMN] = _column(out.get(CONF_RELATED_COLUMN, 1))
+    out[CONF_MMWAVE_COLUMN] = _column(out.get(CONF_MMWAVE_COLUMN, 3))
     return out
 
 

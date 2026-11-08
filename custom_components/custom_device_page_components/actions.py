@@ -151,3 +151,65 @@ async def async_run_action(
         target={target_kind: target_value},
         context=Context(user_id=user_id),
     )
+
+
+# ---------------------------------------------------------------------------
+# Narrow exception: Inovelli mmWave interference area (built-in component)
+# ---------------------------------------------------------------------------
+#
+# The row-action policy above keeps blocking zwave_js.set_config_parameter,
+# zha.issue_zigbee_cluster_command and anything named "clear"/"reset". The
+# built-in mmWave card may send exactly two commands, and only these shapes:
+#
+# - zwave_js.set_config_parameter, parameter 111, value 1 or 3, targeting
+#   one VZW32-SN device by device_id;
+# - zha.issue_zigbee_cluster_command on cluster 64562 (0xFC32), endpoint 1,
+#   server command 0, params {"control_id": 1 or 3}, for one VZM32-SN by IEEE.
+#
+# Values 0 (factory reset), 2, 4 (reset detection area) and 5 stay blocked.
+
+MMWAVE_ALLOWED_VALUES = frozenset({1, 3})
+
+
+def _exact_int(value: Any) -> int | None:
+    return value if type(value) is int else None
+
+
+def mmwave_call_allowed(
+    domain: str,
+    service: str,
+    data: dict[str, Any],
+    target: dict[str, Any] | None,
+    model: str | None,
+    device: Any,
+) -> bool:
+    """True only for the two Generate/Clear calls on the right device."""
+    if domain == "zwave_js" and service == "set_config_parameter":
+        return (
+            model == "VZW32-SN"
+            and set(data) == {"parameter", "value"}
+            and _exact_int(data.get("parameter")) == 111
+            and _exact_int(data.get("value")) in MMWAVE_ALLOWED_VALUES
+            and target == {"device_id": getattr(device, "id", None)}
+        )
+    if domain == "zha" and service == "issue_zigbee_cluster_command":
+        params = data.get("params")
+        ieees = {
+            ident for dom, ident in getattr(device, "identifiers", set()) if dom == "zha"
+        }
+        return (
+            model == "VZM32-SN"
+            and target is None
+            and set(data) == {"ieee", "endpoint_id", "cluster_id", "cluster_type",
+                              "command", "command_type", "params"}
+            and data.get("ieee") in ieees
+            and _exact_int(data.get("endpoint_id")) == 1
+            and _exact_int(data.get("cluster_id")) == 64562
+            and data.get("cluster_type") == "in"
+            and _exact_int(data.get("command")) == 0
+            and data.get("command_type") == "server"
+            and isinstance(params, dict)
+            and set(params) == {"control_id"}
+            and _exact_int(params.get("control_id")) in MMWAVE_ALLOWED_VALUES
+        )
+    return False

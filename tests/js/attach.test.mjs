@@ -13,7 +13,10 @@ const hass = { config: { version: "2026.10.4" }, devices: { dev1: {} }, connecti
     { id: "s1", type: "query", title: "Lights", order: 5, style: "table", empty_text: "", labels: ["Entity", "State"], rows: [{ cells: ["light.a", "on"], key: "k1", link: { kind: "more_info", entity_id: "light.a" } }], actions: [{ index: 0, label: "Toggle", confirm: true, confirm_text: "Sure?" }], truncated: false, error: null },
     { id: "s2", type: "query", title: "Nearby", order: 6, style: "list", empty_text: "", labels: ["Name", "Integration", "Model", "Labels"], rows: [{ cells: ["Fan", "tplink", "", "fan", "c5", "c6", "c7", "c8", "c9"], key: "k2", link: { kind: "url", url: "/config/devices/device/d2" } }], actions: [], truncated: false, error: null },
     { id: "c3", type: "query", title: "RightCol", order: 1, column: 3, style: "list", empty_text: "", labels: ["A"], rows: [{ cells: ["r3"], key: "k3", link: null }], actions: [], truncated: false, error: null },
-    { id: "c2", type: "query", title: "MiddleCol", order: 2, column: 2, style: "list", empty_text: "", labels: ["A"], rows: [{ cells: ["r2"], key: "k4", link: null }], actions: [], truncated: false, error: null }] }; return {}; } };
+    { id: "c2", type: "query", title: "MiddleCol", order: 2, column: 2, style: "list", empty_text: "", labels: ["A"], rows: [{ cells: ["r2"], key: "k4", link: null }], actions: [], truncated: false, error: null },
+    { id: "mmwave", type: "mmwave", title: "mmWave interference area", order: 30, column: 3, description: "Store what is moving", sent_text: "Sent — watch for the orange LED (~20 s)",
+      buttons: [{ command: "generate", label: "Generate interference area", confirm_text: "Scans about 20 seconds, LED pulses orange. Undo: Clear interference area." },
+                { command: "clear", label: "Clear interference area", confirm_text: "Removes the stored interference area." }] }] }; return {}; } };
 // Fake device page with the layout of the current frontend.
 w.eval(`class Page extends HTMLElement {
   constructor(){ super(); this.attachShadow({mode:"open"}); }
@@ -106,6 +109,27 @@ await connection.sendMessagePromise({ type: "call_service", domain: "light", ser
 await connection.sendMessagePromise(msg("number.other", 1));
 await connection.sendMessagePromise({ type: "get_states" });
 if (sent.length !== 4 || w.document.querySelector(".cdpc-confirm")) throw new Error("intercepted something it should not");
+// mmWave card: confirmation first, then a confirmed command, then a transient "Sent" note
+const mmCard = () => [...page.shadowRoot.querySelectorAll("cdpc-device-components")].map(h => h.shadowRoot).find(r => r.innerHTML.includes("mmWave interference area"));
+let mm = mmCard();
+if (!mm) throw new Error("mmWave card missing");
+const mmBefore = calls.length;
+mm.querySelector('button[data-mm="generate"]').click();
+await new Promise(r => setTimeout(r, 10));
+mm = mmCard();
+if (calls.length !== mmBefore) throw new Error("mmWave sent without confirmation");
+if (!mm.innerHTML.includes("Scans about 20 seconds")) throw new Error("mmWave confirm text missing");
+mm.querySelector('button[data-mm-cancel="generate"]').click();
+await new Promise(r => setTimeout(r, 10));
+mm = mmCard();
+if (calls.length !== mmBefore || mm.innerHTML.includes("Scans about 20 seconds")) throw new Error("mmWave cancel did not cancel");
+mm.querySelector('button[data-mm="generate"]').click();
+await new Promise(r => setTimeout(r, 10));
+mmCard().querySelector('button[data-mm-go="1"]').click();
+await new Promise(r => setTimeout(r, 20));
+const mmCall = calls.slice(mmBefore).find(c => c.type.endsWith("/mmwave_command"));
+if (!mmCall || mmCall.command !== "generate" || mmCall.confirmed !== true || mmCall.device_id !== "dev1") throw new Error("mmWave command wrong: " + JSON.stringify(mmCall));
+if (!mmCard().innerHTML.includes("watch for the orange LED")) throw new Error("mmWave sent note missing");
 // unknown layout -> failure report
 const p2 = w.document.createElement("ha-config-device-page");
 p2.hass = hass; p2.deviceId = "dev1"; w.document.body.appendChild(p2);

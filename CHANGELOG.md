@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.9 — 2026-11-07
+
+- New built-in **Inovelli mmWave interference area** card on Inovelli VZM32-SN (ZHA) and VZW32-SN (Z-Wave JS) device pages: *Generate interference area* stores what is moving in the room now (HVAC airflow, fans, curtains) as interference; *Clear interference area* removes it. Always confirmed; runs as the person who pressed it; admin only. Options: on/off (default on) and column (default 3).
+- Safety: a narrowly scoped allow for exactly those two commands — ZHA cluster 0xFC32 command 0 with `control_id` 1/3, and Z-Wave parameter 111 with value 1/3 — on the open device only. Every other value (factory reset, reset detection area, …) and every row action using these services stays blocked.
+
 ## 0.1.8 — 2026-11-07
 
 - Column formats: **Show as feet and inches** for lengths (e.g. 600 cm → `19′ 8″`, −75 cm → `-2′ 6″`). Decimals apply to the inches.

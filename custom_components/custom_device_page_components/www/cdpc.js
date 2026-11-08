@@ -7,7 +7,7 @@
  * placed in that column), and tells the integration whether that worked. If a frontend update changes the device page, the card does
  * not appear and Home Assistant shows a Repair issue instead.
  */
-const CDPC_VERSION = "0.1.8";
+const CDPC_VERSION = "0.1.9";
 // Displayed columns per component; the server enforces the same cap.
 const MAX_COLUMNS = 8;
 const DOMAIN = "custom_device_page_components";
@@ -438,6 +438,66 @@ class CdpcDeviceComponents extends HTMLElement {
       .join("");
   }
 
+  // Inovelli mmWave: Generate / Clear interference area. Always confirmed;
+  // after the switch acknowledges, a short "Sent" note (the switch reports
+  // nothing back about the stored map, so nothing more is claimed).
+  _mmwave(comp) {
+    const st = this._mmState || (this._mmState = {});
+    const desc = comp.description ? `<div class="note" style="margin:0 0 8px">${esc(comp.description)}</div>` : "";
+    const buttons = comp.buttons
+      .map((b) => {
+        const s = st[b.command];
+        if (s === "confirm")
+          return `<div class="confirm" style="margin:8px 0">${esc(b.confirm_text)}</div>
+            <button class="danger" data-mm="${esc(b.command)}" data-mm-go="1">${esc(b.label)}</button>
+            <button data-mm-cancel="${esc(b.command)}">Cancel</button>`;
+        if (s === "busy") return `<button disabled>${esc(b.label)}…</button>`;
+        return `<button data-mm="${esc(b.command)}">${esc(b.label)}</button>`;
+      })
+      .join(" ");
+    const note = st.sent ? `<div class="note">${esc(comp.sent_text)}</div>` : "";
+    const err = st.error ? `<div class="error">${esc(st.error)}</div>` : "";
+    return `${desc}<div class="acts">${buttons}</div>${note}${err}`;
+  }
+
+  async _mmClick(t) {
+    const st = this._mmState || (this._mmState = {});
+    if (t.dataset.mmCancel) {
+      delete st[t.dataset.mmCancel];
+      this._render();
+      return;
+    }
+    const command = t.dataset.mm;
+    if (t.dataset.mmGo !== "1") {
+      for (const k of ["generate", "clear"]) if (st[k] === "confirm") delete st[k];
+      st[command] = "confirm";
+      st.sent = false;
+      st.error = null;
+      this._render();
+      return;
+    }
+    st[command] = "busy";
+    this._render();
+    try {
+      await this._hass.callWS({
+        type: `${DOMAIN}/mmwave_command`,
+        device_id: this._deviceId,
+        command,
+        confirmed: true,
+      });
+      st.sent = true;
+      clearTimeout(this._mmTimer);
+      this._mmTimer = setTimeout(() => {
+        st.sent = false;
+        this._render();
+      }, 30000);
+    } catch (err) {
+      st.error = (err && err.message) || String(err);
+    }
+    delete st[command];
+    this._render();
+  }
+
   _query(comp) {
     if (comp.error) return `<div class="error">${esc(comp.error)}</div>`;
     if (!comp.rows.length) return `<div class="empty">${esc(comp.empty_text)}</div>`;
@@ -499,7 +559,7 @@ class CdpcDeviceComponents extends HTMLElement {
         .map(
           (comp, i) => `<ha-card outlined><div class="card-header"><span>${esc(comp.title)}</span>
             ${i === 0 ? `<button class="refresh" title="Refresh" data-refresh="1">↻</button>` : ""}</div>
-            <div class="content">${comp.type === "related" ? this._related(comp) : this._query(comp)}</div></ha-card>`
+            <div class="content">${comp.type === "related" ? this._related(comp) : comp.type === "mmwave" ? this._mmwave(comp) : this._query(comp)}</div></ha-card>`
         )
         .join("");
     }
@@ -526,6 +586,10 @@ class CdpcDeviceComponents extends HTMLElement {
     }
     if (t.dataset.refresh) {
       this._load();
+      return;
+    }
+    if (t.dataset.mm || t.dataset.mmCancel) {
+      await this._mmClick(t);
       return;
     }
     if (t.dataset.cancel) {
